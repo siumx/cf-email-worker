@@ -32,7 +32,7 @@ npm run deploy
 - `ADMIN_MAIL_HOSTS`: full hostnames that can read every inbox and send mail. Any other host drops its first label and only shows mail for the remaining recipient domain. `mail.example.com` therefore matches `*@example.com`.
 - `SENDABLE_DOMAINS`: sender domains this Worker may use. Sending is disabled when the value is unset or an empty array.
 
-After deploy, point the destination addresses or the catch-all in Cloudflare Email Routing at this Worker.
+After deploy, point the destination addresses or the catch-all in Cloudflare Email Routing at this Worker. Walkthrough: [Cloudflare Email Routing Setup](docs/Cloudflare_Email_Routing_Setup.pdf).
 
 ## Layout
 
