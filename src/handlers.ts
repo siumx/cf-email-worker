@@ -39,7 +39,7 @@ export function mailConfigJson(env: Env, hostname: string): Response {
 
 export async function handleSendEmail(request: Request, env: Env, hostname: string): Promise<Response> {
   if (!isAdminMailHost(hostname, env.ADMIN_MAIL_HOSTS)) {
-    return jsonError("Unauthorized", 403);
+    return jsonError("Unauthorized", 403, "FORBIDDEN");
   }
 
   try {
@@ -56,17 +56,17 @@ export async function handleSendEmail(request: Request, env: Env, hostname: stri
 
     const toAddresses = body.to ?? [];
     if (!Array.isArray(toAddresses) || toAddresses.length === 0) {
-      return jsonError("'to' must contain at least one address", 400);
+      return jsonError("'to' must contain at least one address", 400, "RECIPIENT_REQUIRED");
     }
 
     // Sender address must be provided by the client
     const fromEmail = body.from?.trim();
     if (!fromEmail) {
-      return jsonError("'from' is required", 400);
+      return jsonError("'from' is required", 400, "SENDER_REQUIRED");
     }
     const fromDomain = fromEmail.match(/^[^\s@]+@([a-z0-9.-]+)$/i)?.[1].toLowerCase() ?? "";
     if (!fromDomain || !(env.SENDABLE_DOMAINS ?? []).some((domain) => domain.trim().toLowerCase() === fromDomain)) {
-      return jsonError("'from' domain is not allowed", 400);
+      return jsonError("'from' domain is not allowed", 400, "SENDER_DOMAIN_NOT_ALLOWED");
     }
     const senderName = body.name?.trim() || "";
     const fromAddress = senderName ? `"${senderName}" <${fromEmail}>` : fromEmail;
@@ -251,12 +251,13 @@ export async function handleSendEmail(request: Request, env: Env, hostname: stri
     } else {
       return jsonError(
         `All recipients failed: ${failed.map(f => `${f.recipient} (${f.error})`).join(", ")}`,
-        500
+        500,
+        "SEND_FAILED"
       );
     }
   } catch (e: unknown) {
     const errMsg = e instanceof Error ? e.message : String(e);
-    return jsonError(`Failed to send email: ${errMsg}`, 500);
+    return jsonError(`Failed to send email: ${errMsg}`, 500, "SEND_FAILED");
   }
 }
 
@@ -375,13 +376,13 @@ export async function handleOneClickUnsubscribe(
   requestUrl: URL
 ): Promise<Response> {
   if (!isSameOriginUnsubscribeRequest(request, requestUrl)) {
-    return jsonError("Forbidden", 403);
+    return jsonError("Forbidden", 403, "FORBIDDEN");
   }
 
   const hostname = requestUrl.hostname.toLowerCase();
   const toAddressLike = getToAddressLikePattern(hostname, env.ADMIN_MAIL_HOSTS);
   if (!toAddressLike) {
-    return jsonError("Mail Not Found", 404);
+    return jsonError("Mail Not Found", 404, "MAIL_NOT_FOUND");
   }
 
   const row = await env.DB.prepare(
@@ -393,29 +394,29 @@ export async function handleOneClickUnsubscribe(
     .first<{ headers_json: string }>();
 
   if (!row) {
-    return jsonError("Mail Not Found", 404);
+    return jsonError("Mail Not Found", 404, "MAIL_NOT_FOUND");
   }
 
   let headers: Record<string, unknown>;
   try {
     const parsed = JSON.parse(row.headers_json) as unknown;
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-      return jsonError("Unsubscribe Not Available", 422);
+      return jsonError("Unsubscribe Not Available", 422, "UNSUBSCRIBE_UNAVAILABLE");
     }
     headers = parsed as Record<string, unknown>;
   } catch {
-    return jsonError("Unsubscribe Not Available", 422);
+    return jsonError("Unsubscribe Not Available", 422, "UNSUBSCRIBE_UNAVAILABLE");
   }
 
   const postHeader = getHeader(headers, "list-unsubscribe-post");
   const unsubscribeHeader = getHeader(headers, "list-unsubscribe");
   if (!supportsOneClickUnsubscribe(postHeader)) {
-    return jsonError("Unsubscribe Not Available", 422);
+    return jsonError("Unsubscribe Not Available", 422, "UNSUBSCRIBE_UNAVAILABLE");
   }
 
   const target = parseSafeOneClickUrl(unsubscribeHeader);
   if (!target) {
-    return jsonError("Unsubscribe Not Available", 422);
+    return jsonError("Unsubscribe Not Available", 422, "UNSUBSCRIBE_UNAVAILABLE");
   }
 
   let upstream: Response;
@@ -438,7 +439,7 @@ export async function handleOneClickUnsubscribe(
       error: errorName
     }));
     const isTimeout = errorName === "TimeoutError" || errorName === "AbortError";
-    return jsonError("Unsubscribe Request Failed", isTimeout ? 504 : 502);
+    return jsonError("Unsubscribe Request Failed", isTimeout ? 504 : 502, "UNSUBSCRIBE_FAILED");
   }
 
   const upstreamStatus = upstream.status;
@@ -451,7 +452,7 @@ export async function handleOneClickUnsubscribe(
       targetHost: target.hostname,
       upstreamStatus
     }));
-    return jsonError("Unsubscribe Request Failed", 502);
+    return jsonError("Unsubscribe Request Failed", 502, "UNSUBSCRIBE_FAILED");
   }
 
   console.log(JSON.stringify({
@@ -466,7 +467,7 @@ export async function handleOneClickUnsubscribe(
 export async function mailDetailJson(id: string, env: Env, hostname: string): Promise<Response> {
   const toAddressLike = getToAddressLikePattern(hostname, env.ADMIN_MAIL_HOSTS);
   if (!toAddressLike) {
-    return jsonError("Mail Not Found", 404);
+    return jsonError("Mail Not Found", 404, "MAIL_NOT_FOUND");
   }
 
   const row = await env.DB.prepare(
@@ -489,7 +490,7 @@ export async function mailDetailJson(id: string, env: Env, hostname: string): Pr
     }>();
 
   if (!row) {
-    return jsonError("Mail Not Found", 404);
+    return jsonError("Mail Not Found", 404, "MAIL_NOT_FOUND");
   }
 
   const mail = rowToStoredMail(row);
@@ -512,7 +513,7 @@ export async function mailDetailJson(id: string, env: Env, hostname: string): Pr
 export async function downloadAttachment(id: string, attachmentId: string, env: Env, hostname: string): Promise<Response> {
   const toAddressLike = getToAddressLikePattern(hostname, env.ADMIN_MAIL_HOSTS);
   if (!toAddressLike) {
-    return jsonError("Mail Not Found", 404);
+    return jsonError("Mail Not Found", 404, "MAIL_NOT_FOUND");
   }
 
   const row = await env.DB.prepare(
@@ -524,18 +525,18 @@ export async function downloadAttachment(id: string, attachmentId: string, env: 
     .first<{ attachments_json: string }>();
 
   if (!row) {
-    return jsonError("Mail Not Found", 404);
+    return jsonError("Mail Not Found", 404, "MAIL_NOT_FOUND");
   }
 
   const attachments = parseStoredAttachments(row.attachments_json);
   const target = attachments.find((item) => item.id === attachmentId);
   if (!target) {
-    return jsonError("Attachment Not Found", 404);
+    return jsonError("Attachment Not Found", 404, "ATTACHMENT_NOT_FOUND");
   }
 
   const object = await env.R2.get(target.r2Key);
   if (!object || !object.body) {
-    return jsonError("Attachment Not Found", 404);
+    return jsonError("Attachment Not Found", 404, "ATTACHMENT_NOT_FOUND");
   }
 
   const headers = new Headers();

@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="zh-Hant">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>郵件</title>
+    <title data-i18n="mail.pageTitle">Message</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
@@ -11,11 +11,26 @@
   </head>
   <body>
     <main class="app-container" data-component="mail-detail-page">
+      <div class="preferences-toolbar" role="group" aria-label="Interface preferences" data-i18n-aria-label="settings.label">
+        <label class="preference-field" for="language-select">
+          <span id="language-label" data-i18n="settings.language">Language</span>
+          <select id="language-select" aria-labelledby="language-label" class="form-input form-select" data-action="change-language" disabled>
+            <option>Loading…</option>
+          </select>
+        </label>
+        <label class="preference-field" for="timezone-select">
+          <span id="timezone-label" data-i18n="settings.timeZone">Time zone</span>
+          <select id="timezone-select" aria-labelledby="timezone-label" class="form-input form-select" data-action="change-timezone" disabled>
+            <option>UTC+08:00</option>
+          </select>
+        </label>
+      </div>
+
       <a id="back-link" class="btn back-link" href="/">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <path d="m15 18-6-6 6-6" />
         </svg>
-        回到列表
+        <span data-i18n="mail.back">Back to inbox</span>
       </a>
 
       <div id="err" class="status-alert status-alert-danger hidden" role="alert"></div>
@@ -24,49 +39,51 @@
         <header class="detail-card mail-detail-header" data-component="detail-header">
           <div class="detail-subject-row">
             <h1 id="subject" class="detail-subject"></h1>
-            <button id="unsubscribe-btn" type="button" class="btn unsubscribe-btn hidden">
-              取消訂閱
+            <button id="unsubscribe-btn" data-action="unsubscribe" type="button" class="btn unsubscribe-btn hidden" data-i18n="mail.unsubscribe">
+              Unsubscribe
             </button>
           </div>
 
           <dl class="detail-meta-grid">
             <div>
-              <dt>From</dt>
+              <dt data-i18n="common.from">From</dt>
               <dd id="from"></dd>
             </div>
             <div>
-              <dt>To</dt>
+              <dt data-i18n="common.to">To</dt>
               <dd id="to"></dd>
             </div>
             <div>
-              <dt>Received</dt>
+              <dt data-i18n="common.received">Received</dt>
               <dd id="received"></dd>
             </div>
             <div id="cc-row" class="full hidden">
-              <dt>CC</dt>
+              <dt data-i18n="common.cc">Cc</dt>
               <dd id="cc"></dd>
             </div>
             <div id="reply-to-row" class="full hidden">
-              <dt>Reply-To</dt>
+              <dt data-i18n="common.replyTo">Reply-To</dt>
               <dd id="reply-to"></dd>
             </div>
           </dl>
         </header>
 
-        <div role="tablist" aria-label="郵件內容" class="tabs" data-component="content-tabs">
+        <div role="tablist" aria-label="Message content" data-i18n-aria-label="mail.tabsLabel" class="tabs" data-component="content-tabs">
           <button
             type="button"
             class="tab-btn active"
-            data-target="rendered-panel"
+            data-action="content-tab" data-target="rendered-panel"
             aria-selected="true"
+            data-i18n="mail.rendered"
           >
-            Rendered
+            Message
           </button>
           <button
             type="button"
             class="tab-btn"
-            data-target="headers-panel"
+            data-action="content-tab" data-target="headers-panel"
             aria-selected="false"
+            data-i18n="mail.headers"
           >
             Headers
           </button>
@@ -83,13 +100,13 @@
         </section>
 
         <section id="attachments-wrap" class="attachments-section hidden" data-component="attachments">
-          <h2 class="attachments-title">附件</h2>
+          <h2 class="attachments-title" data-i18n="common.attachments">Attachments</h2>
           <ul id="attachments-list" class="mail-list"></ul>
         </section>
 
         <details class="raw-details" style="margin-top: 20px;" data-component="raw-panel">
           <summary class="raw-summary">
-            <span>完整 Raw</span>
+            <span data-i18n="mail.raw">Full raw message</span>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="m6 9 6 6 6-6" />
             </svg>
@@ -102,7 +119,7 @@
     </main>
 
     <div
-      id="link-confirm-backdrop"
+      id="link-confirm-backdrop" data-action="link-backdrop"
       class="link-confirm-backdrop"
       aria-hidden="true"
       role="dialog"
@@ -111,8 +128,8 @@
     >
       <div class="link-confirm-modal" role="document">
         <header class="link-confirm-header">
-          <h2 id="link-confirm-title" class="link-confirm-title">即將前往外部網站</h2>
-          <button id="link-confirm-close" type="button" class="btn btn-icon" aria-label="關閉">
+          <h2 id="link-confirm-title" class="link-confirm-title" data-i18n="mail.externalTitle">You are opening an external website</h2>
+          <button id="link-confirm-close" data-action="link-close" type="button" class="btn btn-icon" aria-label="Close" data-i18n-aria-label="common.close">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M18 6 6 18" />
               <path d="m6 6 12 12" />
@@ -120,19 +137,19 @@
           </button>
         </header>
         <div class="link-confirm-body">
-          <p>此連結來自郵件內容，請確認目的地後再開啟：</p>
+          <p data-i18n="mail.externalDescription">This link comes from the message. Check the destination before opening it:</p>
           <div id="link-confirm-host" class="link-confirm-host"></div>
           <pre id="link-confirm-url" class="link-confirm-url"></pre>
         </div>
         <footer class="link-confirm-footer">
-          <button id="link-confirm-cancel" type="button" class="btn">取消</button>
-          <button id="link-confirm-continue" type="button" class="btn btn-primary">繼續前往</button>
+          <button id="link-confirm-cancel" data-action="link-close" type="button" class="btn" data-i18n="common.cancel">Cancel</button>
+          <button id="link-confirm-continue" data-action="link-continue" type="button" class="btn btn-primary" data-i18n="mail.continue">Continue</button>
         </footer>
       </div>
     </div>
 
     <div
-      id="unsubscribe-confirm-backdrop"
+      id="unsubscribe-confirm-backdrop" data-action="unsubscribe-backdrop"
       class="link-confirm-backdrop"
       aria-hidden="true"
       role="dialog"
@@ -141,8 +158,8 @@
     >
       <div class="link-confirm-modal" role="document">
         <header class="link-confirm-header">
-          <h2 id="unsubscribe-confirm-title" class="link-confirm-title">確認取消訂閱</h2>
-          <button id="unsubscribe-confirm-close" type="button" class="btn btn-icon" aria-label="關閉">
+          <h2 id="unsubscribe-confirm-title" class="link-confirm-title" data-i18n="mail.unsubscribeTitle">Confirm unsubscribe</h2>
+          <button id="unsubscribe-confirm-close" data-action="unsubscribe-close" type="button" class="btn btn-icon" aria-label="Close" data-i18n-aria-label="common.close">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M18 6 6 18" />
               <path d="m6 6 12 12" />
@@ -150,477 +167,21 @@
           </button>
         </header>
         <div class="link-confirm-body">
-          <p>將向寄件方送出 One-Click 取消訂閱請求：</p>
+          <p data-i18n="mail.unsubscribeDescription">A one-click unsubscribe request will be sent to the sender:</p>
           <div id="unsubscribe-confirm-host" class="link-confirm-host"></div>
           <pre id="unsubscribe-confirm-url" class="link-confirm-url"></pre>
         </div>
         <footer class="link-confirm-footer">
-          <button id="unsubscribe-confirm-cancel" type="button" class="btn">取消</button>
-          <button id="unsubscribe-confirm-submit" type="button" class="btn btn-primary">確認取消訂閱</button>
+          <button id="unsubscribe-confirm-cancel" data-action="unsubscribe-close" type="button" class="btn" data-i18n="common.cancel">Cancel</button>
+          <button id="unsubscribe-confirm-submit" data-action="unsubscribe-submit" type="button" class="btn btn-primary" data-i18n="mail.unsubscribeConfirm">Confirm unsubscribe</button>
         </footer>
       </div>
     </div>
 
+    <script src="lib/i18next.js"></script>
     <script src="js/utils.js"></script>
-    <script>
-      const params = new URLSearchParams(location.search);
-      const id = params.get("id");
-      const pageParam = params.get("page");
-      const qParam = params.get("q");
-      const errEl = document.getElementById("err");
-      const contentEl = document.getElementById("content");
-      const backLink = document.getElementById("back-link");
+    <script src="js/api.js"></script>
+    <script src="js/app.js"></script>
 
-      if (backLink) {
-        const backParams = new URLSearchParams();
-        if (pageParam) backParams.set("page", pageParam);
-        if (qParam) backParams.set("q", qParam);
-        const qs = backParams.toString();
-        backLink.href = qs ? `/?${qs}` : "/";
-      }
-
-      const linkConfirmBackdrop = document.getElementById("link-confirm-backdrop");
-      const linkConfirmHost = document.getElementById("link-confirm-host");
-      const linkConfirmUrl = document.getElementById("link-confirm-url");
-      const linkConfirmClose = document.getElementById("link-confirm-close");
-      const linkConfirmCancel = document.getElementById("link-confirm-cancel");
-      const linkConfirmContinue = document.getElementById("link-confirm-continue");
-      const unsubscribeBtn = document.getElementById("unsubscribe-btn");
-      const unsubscribeConfirmBackdrop = document.getElementById("unsubscribe-confirm-backdrop");
-      const unsubscribeConfirmHost = document.getElementById("unsubscribe-confirm-host");
-      const unsubscribeConfirmUrl = document.getElementById("unsubscribe-confirm-url");
-      const unsubscribeConfirmClose = document.getElementById("unsubscribe-confirm-close");
-      const unsubscribeConfirmCancel = document.getElementById("unsubscribe-confirm-cancel");
-      const unsubscribeConfirmSubmit = document.getElementById("unsubscribe-confirm-submit");
-      let pendingExternalUrl = "";
-      let unsubscribeTarget = null;
-      let mailFrame = null;
-
-      function setupTabs() {
-        const buttons = Array.from(document.querySelectorAll(".tab-btn"));
-        const renderedPanel = document.getElementById("rendered-panel");
-        const headersPanel = document.getElementById("headers-panel");
-
-        buttons.forEach((button) => {
-          button.addEventListener("click", () => {
-            const target = button.getAttribute("data-target");
-            buttons.forEach((b) => {
-              const isActive = b === button;
-              b.classList.toggle("active", isActive);
-              b.setAttribute("aria-selected", String(isActive));
-            });
-            renderedPanel.classList.toggle("hidden", target !== "rendered-panel");
-            headersPanel.classList.toggle("hidden", target !== "headers-panel");
-          });
-        });
-      }
-
-      function formatDate(iso) {
-        if (!iso) return "";
-        const d = new Date(iso);
-        if (Number.isNaN(d.getTime())) return iso;
-        return d.toLocaleString("zh-Hant", {
-          year: "numeric",
-          month: "2-digit",
-          day: "2-digit",
-          hour: "2-digit",
-          minute: "2-digit",
-          second: "2-digit"
-        });
-      }
-
-      function formatBytes(bytes) {
-        if (bytes === 0) return "0 B";
-        const k = 1024;
-        const sizes = ["B", "KB", "MB", "GB"];
-        const i = Math.floor(Math.log(bytes) / Math.log(k));
-        return `${(bytes / Math.pow(k, i)).toFixed(i === 0 ? 0 : 2)} ${sizes[i]}`;
-      }
-
-      function parseListUnsubscribe(header) {
-        const result = { httpsUrl: "", mailtoUrl: "" };
-        if (typeof header !== "string") return result;
-
-        for (const match of header.matchAll(/<([^>]+)>/g)) {
-          const raw = (match[1] || "").trim();
-          let parsed;
-          try {
-            parsed = new URL(raw);
-          } catch {
-            continue;
-          }
-
-          if (!result.httpsUrl && parsed.protocol === "https:") {
-            result.httpsUrl = parsed.href;
-          } else if (!result.mailtoUrl && parsed.protocol === "mailto:") {
-            result.mailtoUrl = parsed.href;
-          }
-        }
-
-        return result;
-      }
-
-      function supportsOneClick(header) {
-        return typeof header === "string" &&
-          /(?:^|[;\s])list-unsubscribe\s*=\s*one-click(?:$|[;\s])/i.test(header.trim());
-      }
-
-      function configureUnsubscribe(headers) {
-        const values = parseListUnsubscribe(headers?.["list-unsubscribe"]);
-        const hasTarget = Boolean(values.httpsUrl || values.mailtoUrl);
-
-        unsubscribeTarget = hasTarget
-          ? {
-              ...values,
-              oneClick: Boolean(values.httpsUrl && supportsOneClick(headers?.["list-unsubscribe-post"]))
-            }
-          : null;
-        unsubscribeBtn.classList.toggle("hidden", !unsubscribeTarget);
-      }
-
-      function openUnsubscribeConfirm() {
-        if (!unsubscribeTarget?.httpsUrl || !unsubscribeTarget.oneClick) return;
-        const parsed = parseSafeExternalUrl(unsubscribeTarget.httpsUrl);
-        if (!parsed || parsed.protocol !== "https:") return;
-
-        unsubscribeConfirmHost.textContent = parsed.host;
-        unsubscribeConfirmUrl.textContent = parsed.href;
-        unsubscribeConfirmBackdrop.classList.add("open");
-        unsubscribeConfirmBackdrop.setAttribute("aria-hidden", "false");
-        unsubscribeConfirmSubmit.focus();
-      }
-
-      function closeUnsubscribeConfirm() {
-        unsubscribeConfirmBackdrop.classList.remove("open");
-        unsubscribeConfirmBackdrop.setAttribute("aria-hidden", "true");
-        unsubscribeConfirmHost.textContent = "";
-        unsubscribeConfirmUrl.textContent = "";
-      }
-
-      async function submitOneClickUnsubscribe() {
-        if (!unsubscribeTarget?.httpsUrl || !unsubscribeTarget.oneClick) return;
-        const parsed = parseSafeExternalUrl(unsubscribeTarget.httpsUrl);
-        if (!parsed || parsed.protocol !== "https:") return;
-
-        closeUnsubscribeConfirm();
-        unsubscribeBtn.disabled = true;
-        unsubscribeConfirmSubmit.disabled = true;
-        unsubscribeBtn.textContent = "處理中…";
-
-        try {
-          const response = await fetch(`/api/mails/${encodeURIComponent(id)}/unsubscribe`, {
-            method: "POST",
-            headers: {
-              "X-Requested-With": "cf-email-worker"
-            },
-            credentials: "same-origin",
-            redirect: "manual"
-          });
-          if (!response.ok) throw new Error(`HTTP ${response.status}`);
-          notify("取消訂閱請求已送出", "success");
-          unsubscribeBtn.textContent = "已取消訂閱";
-        } catch {
-          notify("無法直接完成取消訂閱，請在外部網站繼續", "danger");
-          unsubscribeBtn.disabled = false;
-          unsubscribeBtn.textContent = "取消訂閱";
-          openLinkConfirm(parsed.href);
-        } finally {
-          unsubscribeConfirmSubmit.disabled = false;
-        }
-      }
-
-      function handleUnsubscribe() {
-        if (!unsubscribeTarget) return;
-
-        if (unsubscribeTarget.oneClick && unsubscribeTarget.httpsUrl) {
-          openUnsubscribeConfirm();
-          return;
-        }
-
-        if (unsubscribeTarget.httpsUrl) {
-          openLinkConfirm(unsubscribeTarget.httpsUrl);
-          return;
-        }
-
-        if (unsubscribeTarget.mailtoUrl) {
-          window.location.href = unsubscribeTarget.mailtoUrl;
-        }
-      }
-
-      function parseSafeExternalUrl(raw) {
-        if (typeof raw !== "string") return null;
-        let parsed;
-        try {
-          parsed = new URL(raw);
-        } catch {
-          return null;
-        }
-        if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return null;
-        return parsed;
-      }
-
-      function openLinkConfirm(url) {
-        const parsed = parseSafeExternalUrl(url);
-        if (!parsed) return;
-        pendingExternalUrl = parsed.href;
-        linkConfirmHost.textContent = parsed.host;
-        linkConfirmUrl.textContent = parsed.href;
-        linkConfirmBackdrop.classList.add("open");
-        linkConfirmBackdrop.setAttribute("aria-hidden", "false");
-        linkConfirmContinue.focus();
-      }
-
-      function closeLinkConfirm() {
-        pendingExternalUrl = "";
-        linkConfirmBackdrop.classList.remove("open");
-        linkConfirmBackdrop.setAttribute("aria-hidden", "true");
-        linkConfirmHost.textContent = "";
-        linkConfirmUrl.textContent = "";
-      }
-
-      function continueExternalLink() {
-        const parsed = parseSafeExternalUrl(pendingExternalUrl);
-        closeLinkConfirm();
-        if (!parsed) return;
-        window.open(parsed.href, "_blank", "noopener,noreferrer");
-      }
-
-      function prepareHtmlForIframe(html) {
-        const doc = new DOMParser().parseFromString(html, "text/html");
-        for (const anchor of doc.querySelectorAll("a[href]")) {
-          const href = (anchor.getAttribute("href") || "").trim();
-          if (!href) {
-            anchor.removeAttribute("href");
-            continue;
-          }
-
-          let parsed;
-          try {
-            parsed = new URL(href);
-          } catch {
-            anchor.removeAttribute("href");
-            anchor.removeAttribute("target");
-            continue;
-          }
-
-          if (parsed.protocol === "http:" || parsed.protocol === "https:") {
-            anchor.setAttribute("data-external-url", parsed.href);
-            anchor.setAttribute("href", "#");
-            anchor.removeAttribute("target");
-            anchor.setAttribute("rel", "noopener noreferrer");
-            continue;
-          }
-
-          if (parsed.protocol === "mailto:" || parsed.protocol === "tel:") {
-            anchor.setAttribute("data-direct-url", parsed.href);
-            anchor.setAttribute("href", "#");
-            anchor.removeAttribute("target");
-            continue;
-          }
-
-          anchor.removeAttribute("href");
-          anchor.removeAttribute("target");
-        }
-
-        const script = doc.createElement("script");
-        script.textContent = `
-          document.addEventListener("click", function (event) {
-            var target = event.target;
-            if (!target || !target.closest) return;
-            var anchor = target.closest("a");
-            if (!anchor) return;
-            var externalUrl = anchor.getAttribute("data-external-url");
-            if (externalUrl) {
-              event.preventDefault();
-              event.stopPropagation();
-              parent.postMessage({ source: "cf-email-worker-mail", type: "external-link", url: externalUrl }, "*");
-              return;
-            }
-            var directUrl = anchor.getAttribute("data-direct-url");
-            if (directUrl) {
-              event.preventDefault();
-              event.stopPropagation();
-              parent.postMessage({ source: "cf-email-worker-mail", type: "direct-link", url: directUrl }, "*");
-            }
-          }, true);
-        `;
-        (doc.body || doc.documentElement).appendChild(script);
-
-        const headHtml = doc.head ? doc.head.innerHTML : "";
-        const bodyHtml = doc.body ? doc.body.innerHTML : doc.documentElement.innerHTML;
-        return `<!DOCTYPE html><html><head><meta charset="utf-8">${headHtml}</head><body>${bodyHtml}</body></html>`;
-      }
-
-      function mountRenderedHtml(html) {
-        const renderedBody = document.getElementById("rendered-body");
-        renderedBody.innerHTML = "";
-
-        const iframe = document.createElement("iframe");
-        iframe.setAttribute("sandbox", "allow-scripts");
-        iframe.setAttribute("referrerpolicy", "no-referrer");
-        iframe.title = "郵件內容";
-        iframe.srcdoc = prepareHtmlForIframe(html);
-        renderedBody.appendChild(iframe);
-        mailFrame = iframe;
-      }
-
-      linkConfirmClose.addEventListener("click", closeLinkConfirm);
-      linkConfirmCancel.addEventListener("click", closeLinkConfirm);
-      linkConfirmContinue.addEventListener("click", continueExternalLink);
-      linkConfirmBackdrop.addEventListener("click", (event) => {
-        if (event.target === linkConfirmBackdrop) closeLinkConfirm();
-      });
-      unsubscribeBtn.addEventListener("click", handleUnsubscribe);
-      unsubscribeConfirmClose.addEventListener("click", closeUnsubscribeConfirm);
-      unsubscribeConfirmCancel.addEventListener("click", closeUnsubscribeConfirm);
-      unsubscribeConfirmSubmit.addEventListener("click", submitOneClickUnsubscribe);
-      unsubscribeConfirmBackdrop.addEventListener("click", (event) => {
-        if (event.target === unsubscribeConfirmBackdrop) closeUnsubscribeConfirm();
-      });
-      document.addEventListener("keydown", (event) => {
-        if (event.key !== "Escape") return;
-        if (linkConfirmBackdrop.classList.contains("open")) closeLinkConfirm();
-        if (unsubscribeConfirmBackdrop.classList.contains("open")) closeUnsubscribeConfirm();
-      });
-
-      window.addEventListener("message", (event) => {
-        if (!mailFrame || event.source !== mailFrame.contentWindow) return;
-        const data = event.data;
-        if (!data || data.source !== "cf-email-worker-mail" || typeof data.url !== "string") return;
-
-        if (data.type === "external-link") {
-          openLinkConfirm(data.url);
-          return;
-        }
-
-        if (data.type === "direct-link") {
-          let parsed;
-          try {
-            parsed = new URL(data.url);
-          } catch {
-            return;
-          }
-          if (parsed.protocol !== "mailto:" && parsed.protocol !== "tel:") return;
-          window.location.href = parsed.href;
-        }
-      });
-
-      async function load() {
-        if (!id) {
-          errEl.classList.remove("hidden");
-          errEl.textContent = "缺少 id 參數";
-          return;
-        }
-
-        try {
-          const r = await fetch(`/api/mails/${encodeURIComponent(id)}`);
-          if (r.status === 404) {
-            errEl.classList.remove("hidden");
-            errEl.textContent = "找不到郵件";
-            return;
-          }
-          if (!r.ok) throw new Error(`HTTP ${r.status}`);
-
-          const { mail, view } = await r.json();
-
-          document.title = mail.subject || "郵件";
-          document.getElementById("subject").textContent = mail.subject || "";
-          configureUnsubscribe(mail.headers);
-          document.getElementById("from").textContent = mail.from || "";
-          document.getElementById("to").textContent = mail.to || "";
-          document.getElementById("received").textContent = formatDate(mail.receivedAt);
-
-          const ccList = Array.isArray(mail.cc) ? mail.cc.filter((v) => typeof v === "string" && v.trim()) : [];
-          const ccRow = document.getElementById("cc-row");
-          const ccEl = document.getElementById("cc");
-          if (ccList.length > 0) {
-            ccEl.textContent = ccList.join(", ");
-            ccRow.classList.remove("hidden");
-          } else {
-            ccEl.textContent = "";
-            ccRow.classList.add("hidden");
-          }
-
-          const replyTo = typeof mail.headers?.["reply-to"] === "string" ? mail.headers["reply-to"].trim() : "";
-          const replyToRow = document.getElementById("reply-to-row");
-          const replyToEl = document.getElementById("reply-to");
-          if (replyTo) {
-            replyToEl.textContent = replyTo;
-            replyToRow.classList.remove("hidden");
-          } else {
-            replyToEl.textContent = "";
-            replyToRow.classList.add("hidden");
-          }
-
-          const renderedBody = document.getElementById("rendered-body");
-          renderedBody.innerHTML = "";
-          mailFrame = null;
-
-          if (view.renderedHtml) {
-            mountRenderedHtml(view.renderedHtml);
-          } else if (view.renderedText) {
-            const pre = document.createElement("pre");
-            pre.className = "pre-wrap";
-            pre.textContent = view.renderedText;
-            renderedBody.appendChild(pre);
-          }
-
-          document.getElementById("raw-pre").textContent = mail.rawText || "";
-          document.getElementById("headers-pre").textContent =
-            JSON.stringify(mail.headers, null, 2) || "(no headers)";
-
-          const attachmentsWrap = document.getElementById("attachments-wrap");
-          const attachmentsList = document.getElementById("attachments-list");
-          const attachments = Array.isArray(mail.attachments) ? mail.attachments : [];
-          attachmentsList.innerHTML = "";
-          if (attachments.length > 0) {
-            attachmentsWrap.classList.remove("hidden");
-            for (const attachment of attachments) {
-              const li = document.createElement("li");
-              li.className = "mail-card";
-              li.style = "padding: 12px 14px;";
-
-              const link = document.createElement("a");
-              link.className = "attachment-download";
-              link.href = `/api/mails/${encodeURIComponent(mail.id)}/attachments/${encodeURIComponent(attachment.id)}`;
-              link.innerHTML = `
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                  <path d="M21.44 11.05 12.94 19.54a6.001 6.001 0 0 1-8.49-8.49l8.49-8.49a4.002 4.002 0 0 1 5.66 5.66l-8.49 8.49a2.002 2.002 0 0 1-2.83-2.83l8.49-8.49" />
-                </svg>
-                ${escapeHtml(attachment.filename || "(unnamed)")}
-              `;
-
-              const meta = document.createElement("p");
-              meta.className = "mail-card-meta";
-              const size = Number.isFinite(attachment.size) ? attachment.size : 0;
-              meta.textContent = `${attachment.contentType || "application/octet-stream"} · ${formatBytes(size)}`;
-
-              li.appendChild(link);
-              li.appendChild(meta);
-              attachmentsList.appendChild(li);
-            }
-          } else {
-            attachmentsWrap.classList.add("hidden");
-          }
-
-          contentEl.hidden = false;
-          setupTabs();
-        } catch (e) {
-          errEl.classList.remove("hidden");
-          errEl.textContent = `載入失敗：${e?.message || String(e)}`;
-        }
-      }
-
-      function escapeHtml(str) {
-        return String(str)
-          .replace(/&/g, "&amp;")
-          .replace(/</g, "&lt;")
-          .replace(/>/g, "&gt;")
-          .replace(/"/g, "&quot;")
-          .replace(/'/g, "&#x27;");
-      }
-
-      load();
-    </script>
   </body>
 </html>
