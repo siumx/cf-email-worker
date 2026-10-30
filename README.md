@@ -20,7 +20,7 @@ Requires Node.js 22 or newer, and Email Routing enabled on the Cloudflare zone.
 Sending from the Worker requires a Workers Paid plan. After that, set the sending domain in the Cloudflare dashboard so the Worker can send directly.
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/siumx/cf-email-worker.git
 cp package.json.example package.json
 cp wrangler.toml.example wrangler.toml
 npx wrangler login
@@ -28,7 +28,7 @@ npm run init
 npm run deploy
 ```
 
-- `wrangler.toml`: set `account_id`, the site hostnames, the D1 `database_name`, and the R2 `bucket_name`. Keep the binding names `DB`, `R2`, and `EMAIL`.
+- `wrangler.toml`: set the site hostnames. Before `npm run init`, check that this Cloudflare account does not already have a D1 named `email-worker-db` or an R2 bucket named `email-worker`. 
 - `ADMIN_MAIL_HOSTS`: full hostnames that can read every inbox and send mail. Any other host drops its first label and only shows mail for the remaining recipient domain. `mail.example.com` therefore matches `*@example.com`.
 - `SENDABLE_DOMAINS`: sender domains this Worker may use. Sending is disabled when the value is unset or an empty array.
 

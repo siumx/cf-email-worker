@@ -20,7 +20,7 @@
 由 Worker 寄信需要 Workers Paid 方案。之後在 Cloudflare 後台設定發信網域，Worker 才能直接寄出。
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/siumx/cf-email-worker.git
 cp package.json.example package.json
 cp wrangler.toml.example wrangler.toml
 npx wrangler login
@@ -28,7 +28,7 @@ npm run init
 npm run deploy
 ```
 
-- `wrangler.toml`：填入 `account_id`、網站 hostname、D1 的 `database_name`、R2 的 `bucket_name`。保留綁定名稱 `DB`、`R2`、`EMAIL`。
+- `wrangler.toml`：填入網站 hostname。執行 `npm run init` 前，確認此 Cloudflare 帳戶還沒有名為 `email-worker-db` 的 D1，以及名為 `email-worker` 的 R2。
 - `ADMIN_MAIL_HOSTS`：可查看全部收件匣並寄信的完整 hostname。其他 host 去掉第一段，只顯示剩餘收件網域的郵件。`mail.example.com` 因此對應 `*@example.com`。
 - `SENDABLE_DOMAINS`：此 Worker 允許使用的寄件者網域。未設定或空陣列時無法寄信。
 

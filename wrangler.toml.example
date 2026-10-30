@@ -1,7 +1,11 @@
 name = "cf-email-worker"
 main = "src/index.ts"
 compatibility_date = "2026-03-24"
-account_id = ""
+#account_id = ""
+
+# 禁用公共域名和預覽 URL
+workers_dev = false
+preview_urls = false
 
 logpush = false
 
@@ -36,5 +40,5 @@ name = "EMAIL"
 
 # 環境變數
 [vars]
-ADMIN_MAIL_HOSTS = ["mailadmin.example.com"]
-SENDABLE_DOMAINS = ["notify.example.com"]
+ADMIN_MAIL_HOSTS = [] # ["mailadmin.example.com", "xxx.com" ...etc]
+SENDABLE_DOMAINS = [] # ["notify.example.com", "bbb.com" ...etc]
