@@ -1,0 +1,83 @@
+# Dependencies
+node_modules/
+bower_components/
+vendor/
+.venv/
+venv/
+
+# Wrangler
+.wrangler/
+wrangler.toml
+wrangler-ms.toml
+wrangler-mx.toml
+package.json
+
+# SQL / local databases
+*.sql.bak
+*.sql
+*.sqlite
+*.sqlite3
+*.db
+*.dump
+
+# Environment / secrets
+.env
+.env.*
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+id_rsa
+id_rsa.pub
+id_ed25519
+.aws/
+.gcp/
+credentials.json
+service-account*.json
+
+# Logs
+*.log
+
+# Build / compress output
+dist/
+build/
+out/
+.next/
+.nuxt/
+.vuepress/dist/
+public.min/
+*.exe
+*.dll
+*.so
+*.dylib
+*.pyd
+
+# Media / archives
+*.mp4
+*.mp3
+*.mov
+*.zip
+*.tar.gz
+*.pdf
+
+# Cursor (local plans / cache; keep .cursorrules)
+.cursorignore
+.cursorrules
+.cursor/
+
+# Editor / IDE
+.idea/
+.vscode/
+.qoder/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# personal
+!*.example
+3.4.17
+req.md
