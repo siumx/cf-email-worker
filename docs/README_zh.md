@@ -32,7 +32,7 @@ npm run deploy
 - `ADMIN_MAIL_HOSTS`：可查看全部收件匣並寄信的完整 hostname。其他 host 去掉第一段，只顯示剩餘收件網域的郵件。`mail.example.com` 因此對應 `*@example.com`。
 - `SENDABLE_DOMAINS`：此 Worker 允許使用的寄件者網域。未設定或空陣列時無法寄信。
 
-部署後，在 Cloudflare Email Routing 將收件地址或 Catch-all 指到此 Worker。步驟見 [Cloudflare Email Routing Setup](Cloudflare_Email_Routing_Setup.pdf)。
+部署後，在 Cloudflare Email Routing 將收件地址或 Catch-all 指到此 Worker。步驟見 [Cloudflare Email Routing Setup](Cloudflare_Email_Routing_Setup.md)。
 
 ## 目錄
 
