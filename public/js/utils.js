@@ -1,96 +1,66 @@
-/**
- * Unified Toast Notification System
- * Usage: notify(message, type) where type = 'success' | 'danger' | 'info'
- */
 (function () {
   "use strict";
 
-  let container = null;
+  const DEFAULT_LANGUAGE = "en";
+  const DEFAULT_TIME_ZONE = "Asia/Singapore";
 
-  async function initFromDomainSelect() {
-    const select = document.getElementById("compose-from-domain");
-    const composeButton = document.getElementById("compose-btn");
-    const submitButton = document.getElementById("compose-submit");
-    if (!select || !composeButton || !submitButton) return;
-
+  function normalizeTimeZone(value) {
+    if (typeof value !== "string" || !value) return DEFAULT_TIME_ZONE;
     try {
-      const response = await fetch("/api/config", { cache: "no-store" });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const config = await response.json();
-
-      for (const domain of config.sendableDomains) {
-        const option = document.createElement("option");
-        option.value = domain;
-        option.textContent = domain;
-        select.appendChild(option);
-      }
-
-      const canSend = config.canSend && config.sendableDomains.length > 0;
-      select.disabled = !canSend;
-      composeButton.disabled = !canSend;
-      submitButton.disabled = !canSend;
-      composeButton.title = canSend ? "" : "此網域未開放發件或尚未設定寄件網域";
-    } catch (error) {
-      composeButton.title = "無法載入發件設定";
-      notify(`無法載入發件設定：${error?.message || String(error)}`, "danger");
+      new Intl.DateTimeFormat("en", { timeZone: value });
+      return value;
+    } catch {
+      return DEFAULT_TIME_ZONE;
     }
   }
 
-  function getContainer() {
-    if (container && document.body.contains(container)) return container;
-    container = document.createElement("div");
-    container.className = "toast-container";
-    container.setAttribute("aria-live", "polite");
-    container.setAttribute("aria-atomic", "false");
-    document.body.appendChild(container);
-    return container;
+  function resolvePreferences(stored, languages) {
+    const savedLanguage = languages.find(({ code }) => code === stored?.language)?.code;
+    return {
+      language: savedLanguage ?? DEFAULT_LANGUAGE,
+      timeZone: normalizeTimeZone(stored?.timeZone)
+    };
   }
 
-  function dismiss(toast) {
-    if (toast.dataset.dismissed) return;
-    toast.dataset.dismissed = "1";
-    toast.classList.add("toast-out");
-    toast.addEventListener("animationend", () => toast.remove(), { once: true });
-    // Fallback removal in case animationend doesn't fire
-    setTimeout(() => { if (toast.parentNode) toast.remove(); }, 400);
+  function getTimeZones(selected) {
+    const supported = typeof Intl.supportedValuesOf === "function"
+      ? Intl.supportedValuesOf("timeZone")
+      : ["Asia/Taipei", "Asia/Tokyo", "Europe/London", "America/New_York", "America/Los_Angeles"];
+    return [...new Set(["UTC", DEFAULT_TIME_ZONE, normalizeTimeZone(selected), ...supported])];
   }
 
-  /**
-   * Show a toast notification.
-   * @param {string} message - The message to display
-   * @param {'success'|'danger'|'info'} type - Notification type
-   */
-  function notify(message, type) {
-    const ct = getContainer();
-    const validTypes = ["success", "danger", "info"];
-    const safeType = validTypes.includes(type) ? type : "info";
-
-    const toast = document.createElement("div");
-    toast.className = `toast toast-${safeType}`;
-    toast.setAttribute("role", "alert");
-
-    const msgSpan = document.createElement("span");
-    msgSpan.className = "toast-message";
-    msgSpan.textContent = message;
-
-    const closeBtn = document.createElement("button");
-    closeBtn.type = "button";
-    closeBtn.className = "toast-close";
-    closeBtn.setAttribute("aria-label", "關閉");
-    closeBtn.innerHTML = "&#215;";
-    closeBtn.addEventListener("click", () => dismiss(toast));
-
-    toast.appendChild(msgSpan);
-    toast.appendChild(closeBtn);
-    ct.appendChild(toast);
-
-    // Auto-dismiss after 3s
-    const timer = setTimeout(() => dismiss(toast), 3000);
-    // If manually dismissed, clear the auto timer
-    closeBtn.addEventListener("click", () => clearTimeout(timer), { once: true });
+  function formatDate(iso, language, timeZone, options = {}) {
+    if (!iso) return "";
+    const date = new Date(iso);
+    if (Number.isNaN(date.getTime())) return iso;
+    return new Intl.DateTimeFormat(language, {
+      year: "numeric", month: "2-digit", day: "2-digit",
+      hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+      ...options,
+      timeZone
+    }).format(date);
   }
 
-  // Expose globally
-  window.notify = notify;
-  initFromDomainSelect();
+  function formatBytes(bytes, language) {
+    if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
+    const sizes = ["B", "KB", "MB", "GB", "TB"];
+    const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), sizes.length - 1);
+    const value = new Intl.NumberFormat(language, { maximumFractionDigits: index === 0 ? 0 : 2 })
+      .format(bytes / (1024 ** index));
+    return `${value} ${sizes[index]}`;
+  }
+
+  function escapeHtml(value) {
+    return String(value)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#x27;");
+  }
+
+  window.MailUtils = {
+    DEFAULT_LANGUAGE, DEFAULT_TIME_ZONE, normalizeTimeZone,
+    resolvePreferences, getTimeZones, formatDate, formatBytes, escapeHtml
+  };
 })();

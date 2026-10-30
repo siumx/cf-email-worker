@@ -114,8 +114,8 @@ export function readListParamsFromSearchParams(searchParams: URLSearchParams): {
   return { page, q };
 }
 
-export function jsonError(message: string, status: number): Response {
-  return new Response(JSON.stringify({ error: message }), {
+export function jsonError(message: string, status: number, code: string): Response {
+  return new Response(JSON.stringify({ error: message, code }), {
     status,
     headers: { "content-type": "application/json; charset=utf-8" }
   });

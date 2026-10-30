@@ -20,7 +20,7 @@ const worker: ExportedHandler<Env> = {
 
     if (url.pathname === "/api/config") {
       if (request.method !== "GET") {
-        return jsonError("Method Not Allowed", 405);
+        return jsonError("Method Not Allowed", 405, "METHOD_NOT_ALLOWED");
       }
       return mailConfigJson(env, url.hostname);
     }
@@ -31,7 +31,7 @@ const worker: ExportedHandler<Env> = {
 
     if (url.pathname === "/api/mails") {
       if (request.method !== "GET") {
-        return jsonError("Method Not Allowed", 405);
+        return jsonError("Method Not Allowed", 405, "METHOD_NOT_ALLOWED");
       }
       const { page, q } = readListParamsFromSearchParams(url.searchParams);
       return listMailsJsonCore(env, url.hostname, page, q);
@@ -40,23 +40,23 @@ const worker: ExportedHandler<Env> = {
     const unsubscribeMatch = url.pathname.match(/^\/api\/mails\/([^/]+)\/unsubscribe\/?$/);
     if (unsubscribeMatch) {
       if (request.method !== "POST") {
-        return jsonError("Method Not Allowed", 405);
+        return jsonError("Method Not Allowed", 405, "METHOD_NOT_ALLOWED");
       }
 
       let id = "";
       try {
         id = decodeURIComponent(unsubscribeMatch[1] ?? "").trim();
       } catch {
-        return jsonError("Bad Request", 400);
+        return jsonError("Bad Request", 400, "INVALID_REQUEST");
       }
       if (!id) {
-        return jsonError("Bad Request", 400);
+        return jsonError("Bad Request", 400, "INVALID_REQUEST");
       }
       return handleOneClickUnsubscribe(request, id, env, url);
     }
 
     if (request.method !== "GET") {
-      return jsonError("Method Not Allowed", 405);
+      return jsonError("Method Not Allowed", 405, "METHOD_NOT_ALLOWED");
     }
 
     const attachmentMatch = url.pathname.match(/^\/api\/mails\/([^/]+)\/attachments\/([^/]+)\/?$/);
@@ -64,7 +64,7 @@ const worker: ExportedHandler<Env> = {
       const id = decodeURIComponent(attachmentMatch[1] ?? "").trim();
       const attachmentId = decodeURIComponent(attachmentMatch[2] ?? "").trim();
       if (!id || !attachmentId) {
-        return jsonError("Bad Request", 400);
+        return jsonError("Bad Request", 400, "INVALID_REQUEST");
       }
       return downloadAttachment(id, attachmentId, env, url.hostname);
     }
@@ -73,12 +73,12 @@ const worker: ExportedHandler<Env> = {
     if (detailMatch) {
       const id = decodeURIComponent(detailMatch[1] ?? "").trim();
       if (!id) {
-        return jsonError("Bad Request", 400);
+        return jsonError("Bad Request", 400, "INVALID_REQUEST");
       }
       return mailDetailJson(id, env, url.hostname);
     }
 
-    return jsonError("Not Found", 404);
+    return jsonError("Not Found", 404, "NOT_FOUND");
   }
 };
 
