@@ -940,8 +940,9 @@ body {
 }
 
 .panel-body iframe {
+  display: block;
   width: 100%;
-  min-height: 520px;
+  min-height: 160px;
   border: none;
   background: var(--white);
   border-radius: 4px;

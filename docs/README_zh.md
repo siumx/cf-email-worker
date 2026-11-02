@@ -6,6 +6,11 @@
 
 以 Cloudflare Email Routing 收信，Workers 提供 Webmail。D1 儲存郵件資料，R2 儲存附件與較大的原始郵件。
 
+## 歡迎試用
+
+打開 [https://demo.emailwk.itdog.ai](https://demo.emailwk.itdog.ai)。
+這個 host 列出 `demo@emailwk.itdog.ai` 的郵件。（沒有 catch-all）
+
 ## 功能
 
 - 收件匣分頁、搜尋主旨／寄件者／收件者，以及自動重新整理。
