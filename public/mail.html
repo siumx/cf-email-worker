@@ -72,15 +72,27 @@
           <button
             type="button"
             class="tab-btn active"
+            id="rendered-tab" role="tab" aria-controls="rendered-panel"
             data-action="content-tab" data-target="rendered-panel"
             aria-selected="true"
-            data-i18n="mail.rendered"
+            data-i18n="mail.html"
           >
-            Message
+            HTML
           </button>
           <button
             type="button"
             class="tab-btn"
+            id="text-tab" role="tab" aria-controls="text-panel"
+            data-action="content-tab" data-target="text-panel"
+            aria-selected="false"
+            data-i18n="mail.plainText"
+          >
+            Plain text
+          </button>
+          <button
+            type="button"
+            class="tab-btn"
+            id="headers-tab" role="tab" aria-controls="headers-panel"
             data-action="content-tab" data-target="headers-panel"
             aria-selected="false"
             data-i18n="mail.headers"
@@ -89,11 +101,17 @@
           </button>
         </div>
 
-        <section id="rendered-panel" class="panel">
+        <section id="rendered-panel" class="panel" role="tabpanel" aria-labelledby="rendered-tab">
           <div class="panel-body" id="rendered-body"></div>
         </section>
 
-        <section id="headers-panel" class="panel hidden">
+        <section id="text-panel" class="panel hidden" role="tabpanel" aria-labelledby="text-tab">
+          <div class="panel-body">
+            <pre id="text-pre" class="pre-wrap"></pre>
+          </div>
+        </section>
+
+        <section id="headers-panel" class="panel hidden" role="tabpanel" aria-labelledby="headers-tab">
           <div class="panel-body">
             <pre id="headers-pre" class="pre-wrap"></pre>
           </div>

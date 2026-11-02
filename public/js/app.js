@@ -655,15 +655,32 @@
     let unsubscribeTarget = null;
     let mailFrame = null;
 
-    actions.set("content-tab", (event, button) => {
+    function selectContentTab(button) {
       const target = button.dataset.target;
-      for (const tab of document.querySelectorAll(".tab-btn")) {
+      for (const tab of document.querySelectorAll('[data-action="content-tab"]')) {
         const selected = tab === button;
         tab.classList.toggle("active", selected);
         tab.setAttribute("aria-selected", String(selected));
+        tab.tabIndex = selected ? 0 : -1;
       }
-      document.getElementById("rendered-panel").classList.toggle("hidden", target !== "rendered-panel");
-      document.getElementById("headers-panel").classList.toggle("hidden", target !== "headers-panel");
+      for (const panel of document.querySelectorAll('[role="tabpanel"]')) {
+        panel.classList.toggle("hidden", panel.id !== target);
+      }
+    }
+
+    actions.set("content-tab", (event, button) => selectContentTab(button));
+    document.addEventListener("keydown", (event) => {
+      const current = event.target.closest('[data-action="content-tab"]');
+      if (!current || !["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+      const tabs = [...document.querySelectorAll('[data-action="content-tab"]')]
+        .filter((tab) => !tab.classList.contains("hidden"));
+      let index = tabs.indexOf(current);
+      if (event.key === "Home") index = 0;
+      else if (event.key === "End") index = tabs.length - 1;
+      else index = (index + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
+      event.preventDefault();
+      selectContentTab(tabs[index]);
+      tabs[index].focus();
     });
 
     function parseListUnsubscribe(header) {
@@ -808,6 +825,19 @@
 
     function prepareHtmlForIframe(html) {
       const doc = new DOMParser().parseFromString(html, "text/html");
+      const defaults = doc.createElement("style");
+      defaults.textContent = `
+        :where(html) { color-scheme: light; background: #fff; }
+        :where(body) { margin: 0; padding: 20px; color: #1f2937; font: 15px/1.6 system-ui, sans-serif; overflow-wrap: anywhere; }
+        :where(a) { color: #008552; }
+        :where(img, video) { max-width: 100%; height: auto; }
+        :where(pre) { white-space: pre-wrap; }
+        :where(body) > :first-child { margin-top: 0; }
+        :where(body) > :last-child { margin-bottom: 0; }
+      `;
+      const charset = doc.createElement("meta");
+      charset.setAttribute("charset", "utf-8");
+      doc.head.prepend(charset, defaults);
       for (const anchor of doc.querySelectorAll("a[href]")) {
         const href = (anchor.getAttribute("href") || "").trim();
         if (!href) {
@@ -845,6 +875,19 @@
 
       const script = doc.createElement("script");
       script.textContent = `
+        var lastHeight = 0;
+        function reportHeight() {
+          var body = document.body;
+          var styles = getComputedStyle(body);
+          var height = Math.ceil(Math.max(body.scrollHeight, body.getBoundingClientRect().height) +
+            (parseFloat(styles.marginTop) || 0) + (parseFloat(styles.marginBottom) || 0));
+          if (height <= 0 || height === lastHeight) return;
+          lastHeight = height;
+          parent.postMessage({ source: "cf-email-worker-mail", type: "resize", height: height }, "*");
+        }
+        new ResizeObserver(reportHeight).observe(document.body);
+        window.addEventListener("load", reportHeight);
+        reportHeight();
         document.addEventListener("click", function (event) {
           var target = event.target;
           if (!target || !target.closest) return;
@@ -867,9 +910,7 @@
       `;
       (doc.body || doc.documentElement).appendChild(script);
 
-      const headHtml = doc.head ? doc.head.innerHTML : "";
-      const bodyHtml = doc.body ? doc.body.innerHTML : doc.documentElement.innerHTML;
-      return `<!DOCTYPE html><html><head><meta charset="utf-8">${headHtml}</head><body>${bodyHtml}</body></html>`;
+      return `<!DOCTYPE html>${doc.documentElement.outerHTML}`;
     }
 
     function mountRenderedHtml(html) {
@@ -906,7 +947,14 @@
     window.addEventListener("message", (event) => {
       if (!mailFrame || event.source !== mailFrame.contentWindow) return;
       const data = event.data;
-      if (!data || data.source !== "cf-email-worker-mail" || typeof data.url !== "string") return;
+      if (!data || data.source !== "cf-email-worker-mail") return;
+      if (data.type === "resize") {
+        if (Number.isFinite(data.height) && data.height > 0 && data.height <= 100000) {
+          mailFrame.style.height = `${Math.ceil(data.height)}px`;
+        }
+        return;
+      }
+      if (typeof data.url !== "string") return;
 
       if (data.type === "external-link") {
         openLinkConfirm(data.url);
@@ -979,12 +1027,15 @@
 
         if (view.renderedHtml) {
           mountRenderedHtml(view.renderedHtml);
-        } else if (view.renderedText) {
-          const pre = document.createElement("pre");
-          pre.className = "pre-wrap";
-          pre.textContent = view.renderedText;
-          renderedBody.appendChild(pre);
         }
+        const htmlTab = document.getElementById("rendered-tab");
+        const textTab = document.getElementById("text-tab");
+        htmlTab.classList.toggle("hidden", !view.renderedHtml);
+        textTab.classList.toggle("hidden", !view.renderedText && Boolean(view.renderedHtml));
+        const textPre = document.getElementById("text-pre");
+        if (view.renderedText) textPre.textContent = view.renderedText;
+        else setMessage(textPre, "mail.emptyBody");
+        selectContentTab(view.renderedHtml ? htmlTab : textTab);
 
         document.getElementById("raw-pre").textContent = mail.rawText || "";
         document.getElementById("headers-pre").textContent =
@@ -992,7 +1043,9 @@
 
         const attachmentsWrap = document.getElementById("attachments-wrap");
         const attachmentsList = document.getElementById("attachments-list");
-        const attachments = Array.isArray(mail.attachments) ? mail.attachments : [];
+        const inlineAttachmentIds = new Set(view.inlineAttachmentIds || []);
+        const attachments = (Array.isArray(mail.attachments) ? mail.attachments : [])
+          .filter((attachment) => !inlineAttachmentIds.has(attachment.id));
         attachmentsList.innerHTML = "";
         if (attachments.length > 0) {
           attachmentsWrap.classList.remove("hidden");

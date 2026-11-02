@@ -49,11 +49,13 @@ export interface ParsedMailContent {
   bodyRaw: string;
   renderedHtml: string | null;
   renderedText: string | null;
+  inlineContentIds: string[];
 }
 
 export interface MailViewJson {
   renderedHtml: string | null;
   renderedText: string | null;
+  inlineAttachmentIds: string[];
 }
 
 export interface MimePart {
@@ -166,9 +168,13 @@ export function rowToStoredMail(row: {
 
 export function buildMailView(mail: StoredMail): MailViewJson {
   const parsed = parseMimeMail(mail.rawText);
+  const inlineContentIds = new Set(parsed.inlineContentIds);
   return {
     renderedHtml: parsed.renderedHtml,
-    renderedText: parsed.renderedText
+    renderedText: parsed.renderedText,
+    inlineAttachmentIds: mail.attachments
+      .filter((attachment) => attachment.contentId && inlineContentIds.has(attachment.contentId))
+      .map((attachment) => attachment.id)
   };
 }
 
@@ -336,7 +342,7 @@ export function parseMimeMail(rawText: string): ParsedMailContent {
   const html = htmlPart
     ? decodePartBody(htmlPart.body, getHeader(htmlPart.headers, "content-transfer-encoding"), getHeader(htmlPart.headers, "content-type"))
     : null;
-  const renderedHtml = html ? sanitizeEmailHtml(resolveInlineImageSources(html, leafParts)) : null;
+  const inlineImages = resolveInlineImageSources(html ? sanitizeEmailHtml(html) : "", leafParts);
   const renderedText = textPart
     ? decodePartBody(textPart.body, getHeader(textPart.headers, "content-transfer-encoding"), getHeader(textPart.headers, "content-type"))
     : null;
@@ -344,19 +350,23 @@ export function parseMimeMail(rawText: string): ParsedMailContent {
   return {
     headersRaw,
     bodyRaw,
-    renderedHtml: renderedHtml || null,
-    renderedText: renderedText || null
+    renderedHtml: inlineImages.html || null,
+    renderedText: renderedText || null,
+    inlineContentIds: inlineImages.contentIds
   };
 }
 
-function resolveInlineImageSources(html: string, parts: MimePart[]): string {
-  return html.replace(/(<img\b[^>]*?\ssrc\s*=\s*)(["']?)(cid:[^\s"'<>]+)\2/gi, (original, prefix: string, _quote: string, source: string) => {
-    let contentId: string;
+function resolveInlineImageSources(html: string, parts: MimePart[]) {
+  const contentIds = new Set<string>();
+  const resolvedHtml = html.replace(/<!--[\s\S]*?-->|(<img\b[^>]*?\ssrc\s*=\s*)(["']?)(cid:[^\s"'<>]+)\2/gi, (original, prefix: string | undefined, _quote: string, source: string) => {
+    if (!prefix) return original;
+    let contentId: string | null;
     try {
-      contentId = decodeURIComponent(decodeBasicHtmlEntities(source.slice(4)));
+      contentId = normalizeContentId(decodeURIComponent(decodeBasicHtmlEntities(source.slice(4))));
     } catch {
       return original;
     }
+    if (!contentId) return original;
 
     const part = parts.find((candidate) => normalizeContentId(getHeader(candidate.headers, "content-id")) === contentId);
     if (!part) return original;
@@ -364,8 +374,11 @@ function resolveInlineImageSources(html: string, parts: MimePart[]): string {
     if (!contentType || !/^image\/[a-z0-9.+-]+$/i.test(contentType)) return original;
 
     const bytes = decodeBodyToBytes(part.body, getHeader(part.headers, "content-transfer-encoding"));
+    if (bytes.length === 0) return original;
+    contentIds.add(contentId);
     return `${prefix}"data:${contentType};base64,${encodeBytesToBase64(bytes)}"`;
   });
+  return { html: resolvedHtml, contentIds: [...contentIds] };
 }
 
 export function collectMimeLeafParts(headers: Record<string, string>, body: string): MimePart[] {
