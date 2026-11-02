@@ -6,6 +6,11 @@
 
 Receives mail through Cloudflare Email Routing and serves webmail from a Worker. D1 stores message data. R2 stores attachments and larger raw messages.
 
+## Try it
+
+Open [https://demo.emailwk.itdog.ai](https://demo.emailwk.itdog.ai). 
+That host lists mail for `demo@emailwk.itdog.ai`. (not catch-all)
+
 ## Features
 
 - Inbox paging, search by subject, sender, or recipient, and automatic refresh.
