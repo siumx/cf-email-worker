@@ -6,14 +6,22 @@
   "author": "siumx",
   "license": "Apache-2.0",
   "scripts": {
-    "init": "npm install && { wrangler d1 create email-worker-db && wrangler d1 execute email-worker-db --remote --file=src/SQL/schema.sql; d1=$?; wrangler r2 bucket create email-worker; r2=$?; exit $((d1 || r2)); }",
+    "init": "npm install && { wrangler d1 create email-worker-db && wrangler d1 execute email-worker-db --remote --file=src/SQL/schema.sql && wrangler d1 migrations apply DB --remote; d1=$?; wrangler r2 bucket create email-worker; r2=$?; exit $((d1 || r2)); }",
     "deploy": "[ -d node_modules ] || npm install && wrangler deploy",
     "typecheck": "tsc --noEmit",
-    "test": "node --test tests/*.test.mjs"
+    "test": "node --test tests/*.test.mjs",
+    "member:setup": "node --experimental-strip-types scripts/member-admin.mjs",
+    "db:migrate:local": "wrangler d1 migrations apply DB --local",
+    "db:migrate:remote": "wrangler d1 migrations apply DB --remote",
+    "test:workers": "node --test tests/workers-runtime.mjs"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260731.1",
+    "@types/node": "^22.20.5",
     "typescript": "^5.8.2",
     "wrangler": "^4.116.0"
+  },
+  "dependencies": {
+    "jose": "^6.2.16"
   }
 }

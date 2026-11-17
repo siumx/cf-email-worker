@@ -659,6 +659,11 @@ body {
   flex: 1 1 6rem;
 }
 
+#compose-from-local:read-only {
+  color: var(--fg-muted);
+  cursor: default;
+}
+
 .from-at {
   flex: 0 0 auto;
   color: var(--fg-muted);
@@ -1233,4 +1238,92 @@ body {
     opacity: 0;
     transform: translateX(40px);
   }
+}
+
+/* Member pages share the existing mail surfaces, controls, and color tokens. */
+.app-container { position: relative; }
+.member-brand { position: absolute; top: 46px; left: 32px; display: flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 500; }
+.member-brand svg { color: var(--accent-bg); }
+.auth-card { max-width: 448px; margin: 60px auto 28px; padding: 32px; border: 1px solid var(--border); border-radius: var(--seed-radius); background: var(--surface); }
+.auth-mark { display: grid; place-items: center; width: 42px; height: 42px; border: 1px solid var(--accent-border); border-radius: 10px; background: var(--accent-subtle); color: var(--accent-bg); font-size: 26px; margin-bottom: 24px; }
+.auth-card h2 { margin: 0 0 12px; font-size: 24px; font-weight: 500; line-height: 1.4; }
+.auth-card .form-stack { display: block; margin-top: 30px; }
+.auth-card label, .member-form > label { display: block; color: var(--fg-secondary); font-size: 13px; font-weight: 500; margin: 24px 0 10px; }
+.auth-card .form-input, .member-form .form-input { width: 100%; min-height: 44px; }
+.password-field { position: relative; }
+.password-field .form-input { padding-right: 48px; }
+.password-toggle { position: absolute; right: 5px; top: 5px; height: 34px; width: 34px; border: 0; padding: 0; }
+.auth-submit { width: 100%; min-height: 46px; margin-top: 24px; }
+.auth-card .btn-primary, .member-editor .btn-primary { color: var(--seed-black); font-weight: 600; }
+.auth-help { margin: 28px 0 0; padding-top: 24px; border-top: 1px solid var(--border); text-align: center; font-size: 13px; color: var(--fg-muted); }
+.auth-bootstrap { text-align: center; color: var(--fg-muted); font-size: 13px; margin: 28px 0 64px; }
+.member-toolbar, .member-navigation, .member-session { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.member-toolbar { justify-content: space-between; margin: 0 0 28px; }
+.member-role { border: 1px solid var(--accent-border); border-radius: 20px; background: var(--accent-subtle); color: var(--fg-secondary); font-size: 12px; padding: 3px 12px; }
+.member-table .member-role { display: inline-block; margin-top: 8px; }
+.member-account { color: var(--fg); font-size: 13px; overflow-wrap: anywhere; }
+.member-layout { display: grid; grid-template-columns: minmax(0, 1fr) 400px; align-items: start; gap: 24px; }
+.member-list-panel, .member-editor { min-width: 0; border: 1px solid var(--border); border-radius: var(--seed-radius); background: var(--surface); }
+.member-list-heading { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; padding: 20px 22px; }
+.member-list-heading h2, .member-editor h2 { font-size: 18px; font-weight: 500; margin: 0; }
+.member-list-heading .page-subtitle { font-size: 12px; }
+.member-search { padding: 0 22px 22px; }
+.member-search .form-input { width: 100%; }
+.member-table, .domain-table { width: 100%; border-collapse: collapse; text-align: left; font-size: 12px; }
+.member-table th { padding: 10px 14px; color: var(--fg-muted); background: var(--panel); font-weight: 400; }
+.member-table td { padding: 20px 14px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+.member-table th:first-child, .member-table td:first-child { padding-left: 22px; }
+.member-table strong { display: block; font-size: 14px; font-weight: 500; overflow-wrap: anywhere; max-width: 120px; }
+.member-table time { display: block; color: var(--fg-muted); font-size: 11px; margin-top: 10px; max-width: 120px; }
+.member-domain-line { display: block; color: var(--fg-secondary); overflow-wrap: anywhere; line-height: 20px; }
+.member-domain-line + .member-domain-line { margin-top: 6px; }
+.member-domain-line > span { margin-right: 6px; color: var(--fg-muted); font-size: 11px; }
+.member-status { display: inline-block; border: 1px solid var(--success-border); background: var(--success-bg); color: var(--success); border-radius: 16px; padding: 3px 9px; white-space: nowrap; }
+.member-status.is-disabled { color: var(--danger); border-color: var(--danger-border); background: var(--danger-bg); }
+.member-actions { position: relative; }
+.member-actions summary { color: var(--fg-muted); cursor: pointer; padding: 5px 2px; list-style: none; }
+.member-actions summary::-webkit-details-marker { display: none; }
+.member-menu { position: absolute; right: 0; bottom: 30px; min-width: 160px; z-index: 4; border: 1px solid var(--border-solid); border-radius: 6px; padding: 5px; background: var(--panel); box-shadow: var(--shadow-dialog); }
+.member-menu .btn { display: block; width: 100%; text-align: left; border: 0; }
+.member-danger { color: var(--danger); }
+.member-pagination { padding: 12px; margin-top: 0; }
+.member-editor-heading { padding: 22px 24px; border-bottom: 1px solid var(--border); }
+.member-editor-heading .page-subtitle { margin-top: 8px; font-size: 13px; }
+.member-form { padding: 0 24px 24px; }
+.field-hint { color: var(--fg-muted); font-size: 12px; line-height: 20px; margin: 8px 0 18px; }
+.field-label-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin: 22px 0 10px; color: var(--fg-secondary); font-size: 13px; }
+.field-label-row .btn { padding: 3px 10px; font-size: 12px; }
+.first-login-note { color: var(--fg-secondary); font-size: 13px; margin: 20px 0; }
+.domain-editor { margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--border); }
+.domain-editor h3 { margin: 0; font-size: 14px; font-weight: 500; }
+.domain-table { border: 1px solid var(--border); background: var(--bg); }
+.domain-table th, .domain-table td { padding: 10px 12px; border-bottom: 1px solid var(--border); }
+.domain-table th { color: var(--fg-muted); font-weight: 400; }
+.domain-table td { color: var(--fg-secondary); overflow-wrap: anywhere; }
+.domain-table :is(th, td):not(:first-child) { text-align: center; width: 58px; }
+.domain-table input { width: 18px; height: 18px; accent-color: var(--accent-bg); vertical-align: middle; cursor: pointer; }
+.member-form-buttons { display: flex; gap: 12px; margin-top: 24px; }
+.member-form-buttons > .btn { flex: 1; min-height: 38px; }
+.member-form-buttons > .btn-primary { flex: 2; }
+.member-dialog { max-width: min(440px, calc(100vw - 32px)); border: 1px solid var(--border-solid); border-radius: var(--seed-radius); padding: 28px; background: var(--panel); color: var(--fg); box-shadow: var(--shadow-dialog); }
+.member-dialog::backdrop { background: var(--overlay); }
+.member-dialog h2 { font-size: 20px; font-weight: 500; margin-top: 0; }
+.member-dialog p { color: var(--fg-secondary); }
+.initial-password-value { display: block; margin: 22px 0; padding: 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; font-size: 17px; user-select: all; overflow-wrap: anywhere; }
+.folder-tabs { margin: 0 0 20px; }
+
+@media (max-width: 1000px) {
+  .member-layout { grid-template-columns: minmax(0, 1fr); }
+  .member-brand { position: static; margin-bottom: 24px; }
+}
+@media (max-width: 639px) {
+  .auth-card { margin-top: 32px; padding: 24px; }
+  .member-toolbar { align-items: flex-start; gap: 16px; }
+  .member-session { gap: 8px; }
+  .member-table-scroll { overflow-x: auto; }
+  .member-table { min-width: 550px; }
+  .member-menu { position: static; min-width: 140px; }
+  .member-editor-heading { padding: 20px; }
+  .member-form { padding: 0 20px 20px; }
+  .domain-table th, .domain-table td { padding: 10px 7px; }
 }

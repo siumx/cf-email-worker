@@ -4,6 +4,10 @@ export interface Env {
   EMAIL: SendEmail;
   ADMIN_MAIL_HOSTS: string[];
   SENDABLE_DOMAINS: string[];
+  RECEIVABLE_DOMAINS?: string[];
+  MEMBER?: { enable?: boolean; admin?: string; password?: string };
+  MEMBER_PASSWORD_PEPPER?: string;
+  MEMBER_JWT_SECRET?: string;
 }
 
 export interface SendAttachment {

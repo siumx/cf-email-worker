@@ -1,7 +1,9 @@
 import { EmailMessage } from "cloudflare:email";
 
 import { storeMailToD1, storeSentAttachmentsToR2 } from "./db";
-import type { Env, MailReference, SendAttachment, StoredAttachment } from "./utils";
+import type { Env, MailFolder, MailReference, SendAttachment, StoredAttachment } from "./utils";
+import type { MailAccess } from "./access";
+import { legacyMailAccess, mailWhere, publicIdentity } from "./access";
 import {
   LIST_PAGE_SIZE,
   buildContentDisposition,
@@ -12,9 +14,7 @@ import {
   escapeLikeForSql,
   extractAttachmentsFromRaw,
   getHeader,
-  getToAddressLikePattern,
   headersToRecord,
-  isAdminMailHost,
   isSameOriginUnsubscribeRequest,
   jsonError,
   jsonOk,
@@ -27,18 +27,26 @@ import {
   supportsOneClickUnsubscribe
 } from "./utils";
 
-export function mailConfigJson(env: Env, hostname: string): Response {
-  const canSend = isAdminMailHost(hostname, env.ADMIN_MAIL_HOSTS);
+function resolveAccess(env: Env, access: MailAccess | string): MailAccess {
+  return typeof access === "string" ? legacyMailAccess(env, access) : access;
+}
+
+export function mailConfigJson(env: Env, access: MailAccess | string): Response {
+  const scope = resolveAccess(env, access);
   const response = jsonOk({
-    canSend,
-    sendableDomains: canSend ? (env.SENDABLE_DOMAINS ?? []) : []
+    memberEnabled: scope.memberEnabled,
+    authenticated: Boolean(scope.identity),
+    identity: publicIdentity(scope.identity),
+    canSend: scope.canSend,
+    sendableDomains: scope.canSend ? scope.sendableDomains : []
   });
   response.headers.set("cache-control", "no-store");
   return response;
 }
 
-export async function handleSendEmail(request: Request, env: Env, hostname: string): Promise<Response> {
-  if (!isAdminMailHost(hostname, env.ADMIN_MAIL_HOSTS)) {
+export async function handleSendEmail(request: Request, env: Env, access: MailAccess | string): Promise<Response> {
+  const scope = resolveAccess(env, access);
+  if (!scope.canSend) {
     return jsonError("Unauthorized", 403, "FORBIDDEN");
   }
 
@@ -54,28 +62,51 @@ export async function handleSendEmail(request: Request, env: Env, hostname: stri
       attachments?: SendAttachment[];
     };
 
+    if (!body || typeof body !== "object" || Array.isArray(body)) return jsonError("Bad Request", 400, "INVALID_REQUEST");
     const toAddresses = body.to ?? [];
     if (!Array.isArray(toAddresses) || toAddresses.length === 0) {
       return jsonError("'to' must contain at least one address", 400, "RECIPIENT_REQUIRED");
     }
 
     // Sender address must be provided by the client
-    const fromEmail = body.from?.trim();
+    const fromEmail = typeof body.from === "string" ? body.from.trim() : "";
     if (!fromEmail) {
       return jsonError("'from' is required", 400, "SENDER_REQUIRED");
     }
     const fromDomain = fromEmail.match(/^[^\s@]+@([a-z0-9.-]+)$/i)?.[1].toLowerCase() ?? "";
-    if (!fromDomain || !(env.SENDABLE_DOMAINS ?? []).some((domain) => domain.trim().toLowerCase() === fromDomain)) {
+    if (!fromDomain || !scope.sendableDomains.some((domain) => domain.trim().toLowerCase() === fromDomain)) {
       return jsonError("'from' domain is not allowed", 400, "SENDER_DOMAIN_NOT_ALLOWED");
     }
-    const senderName = body.name?.trim() || "";
+    if (scope.identity?.role === "user" && fromEmail.toLowerCase() !== `${scope.identity.prefix}@${fromDomain}`) {
+      return jsonError("Sender address is not allowed", 403, "SENDER_PREFIX_NOT_ALLOWED");
+    }
+    const addressPattern = /^[^\s@<>\",;]+@[a-z0-9.-]+\.[a-z0-9-]+$/i;
+    const cc = body.cc ?? [];
+    const bcc = body.bcc ?? [];
+    if (!Array.isArray(cc) || !Array.isArray(bcc) || !addressPattern.test(fromEmail) ||
+      [...toAddresses, ...cc, ...bcc].length > 50 ||
+      [...toAddresses, ...cc, ...bcc].some((address) => typeof address !== "string" || !addressPattern.test(address)) ||
+      [body.subject, body.name].some((value) => value !== undefined && (typeof value !== "string" || /[\r\n\u0000]/.test(value))) ||
+      (body.text !== undefined && typeof body.text !== "string") ||
+      (body.attachments !== undefined && !Array.isArray(body.attachments))) {
+      return jsonError("Bad Request", 400, "INVALID_REQUEST");
+    }
+    const senderName = (body.name?.trim() || "").replace(/["\\]/g, "\\$&");
     const fromAddress = senderName ? `"${senderName}" <${fromEmail}>` : fromEmail;
 
     const subject = body.subject ?? "";
     const text = body.text ?? "";
-    const ccAddresses = body.cc ?? [];
-    const bccAddresses = body.bcc ?? [];
+    const ccAddresses = cc;
+    const bccAddresses = bcc;
     const attachments = body.attachments ?? [];
+    if (attachments.length > 20 || attachments.some((attachment) => !attachment ||
+      typeof attachment.filename !== "string" || typeof attachment.content !== "string" ||
+      attachment.content.length > 25 * 1024 * 1024 || !/^[A-Za-z0-9+/]*={0,2}$/.test(attachment.content) ||
+      (attachment.type && (typeof attachment.type !== "string" || !/^[\w.+-]+\/[\w.+-]+$/.test(attachment.type))) ||
+      (attachment.disposition && !["inline", "attachment"].includes(attachment.disposition)))) {
+      return jsonError("Bad Request", 400, "INVALID_REQUEST");
+    }
+    for (const attachment of attachments) attachment.filename = sanitizeFilename(attachment.filename).replace(/["\\]/g, "_");
 
     // Build MIME message
     const messageId = `<${crypto.randomUUID()}@${fromDomain}>`;
@@ -256,6 +287,7 @@ export async function handleSendEmail(request: Request, env: Env, hostname: stri
       );
     }
   } catch (e: unknown) {
+    if (e instanceof SyntaxError) return jsonError("Bad Request", 400, "INVALID_REQUEST");
     const errMsg = e instanceof Error ? e.message : String(e);
     return jsonError(`Failed to send email: ${errMsg}`, 500, "SEND_FAILED");
   }
@@ -309,25 +341,21 @@ export async function storeIncomingMail(message: ForwardableEmailMessage, env: E
   });
 }
 
-export async function listMailsJsonCore(env: Env, hostname: string, requestedPage: number, q: string): Promise<Response> {
-  const toAddressLike = getToAddressLikePattern(hostname, env.ADMIN_MAIL_HOSTS);
-
-  if (!toAddressLike) {
-    return jsonOk({ mails: [], page: 1, totalPages: 0, total: 0 });
-  }
+export async function listMailsJsonCore(env: Env, access: MailAccess | string, requestedPage: number, q: string, folder: MailFolder = "inbox"): Promise<Response> {
+  const scope = mailWhere(resolveAccess(env, access), folder);
 
   const hasQ = q.length > 0;
   const likePat = hasQ ? `%${escapeLikeForSql(q.toLowerCase())}%` : "";
 
-  const whereTenant = "folder = 'inbox' AND to_address LIKE ?";
+  const whereTenant = `(${scope.sql})`;
   const whereSearch = hasQ
     ? ` AND (LOWER(subject) LIKE ? ESCAPE '\\' OR LOWER(to_address) LIKE ? ESCAPE '\\' OR LOWER(from_address) LIKE ? ESCAPE '\\')`
     : "";
 
   const countSql = `SELECT COUNT(*) as total FROM mails WHERE ${whereTenant}${whereSearch}`;
   const countStmt = hasQ
-    ? env.DB.prepare(countSql).bind(toAddressLike, likePat, likePat, likePat)
-    : env.DB.prepare(countSql).bind(toAddressLike);
+    ? env.DB.prepare(countSql).bind(...scope.values, likePat, likePat, likePat)
+    : env.DB.prepare(countSql).bind(...scope.values);
 
   const totalRow = await countStmt.first<{
     total: number;
@@ -345,8 +373,8 @@ export async function listMailsJsonCore(env: Env, hostname: string, requestedPag
      LIMIT ? OFFSET ?`;
 
   const selectStmt = hasQ
-    ? env.DB.prepare(selectSql).bind(toAddressLike, likePat, likePat, likePat, LIST_PAGE_SIZE, offset)
-    : env.DB.prepare(selectSql).bind(toAddressLike, LIST_PAGE_SIZE, offset);
+    ? env.DB.prepare(selectSql).bind(...scope.values, likePat, likePat, likePat, LIST_PAGE_SIZE, offset)
+    : env.DB.prepare(selectSql).bind(...scope.values, LIST_PAGE_SIZE, offset);
 
   const { results } = await selectStmt.all<{
     id: string;
@@ -373,24 +401,22 @@ export async function handleOneClickUnsubscribe(
   request: Request,
   id: string,
   env: Env,
-  requestUrl: URL
+  requestUrl: URL,
+  access?: MailAccess
 ): Promise<Response> {
   if (!isSameOriginUnsubscribeRequest(request, requestUrl)) {
     return jsonError("Forbidden", 403, "FORBIDDEN");
   }
 
   const hostname = requestUrl.hostname.toLowerCase();
-  const toAddressLike = getToAddressLikePattern(hostname, env.ADMIN_MAIL_HOSTS);
-  if (!toAddressLike) {
-    return jsonError("Mail Not Found", 404, "MAIL_NOT_FOUND");
-  }
+  const scope = mailWhere(resolveAccess(env, access ?? hostname), "inbox");
 
   const row = await env.DB.prepare(
     `SELECT headers_json
      FROM mails
-     WHERE id = ? AND folder = 'inbox' AND to_address LIKE ?`
+     WHERE id = ? AND (${scope.sql})`
   )
-    .bind(id, toAddressLike)
+    .bind(id, ...scope.values)
     .first<{ headers_json: string }>();
 
   if (!row) {
@@ -464,18 +490,15 @@ export async function handleOneClickUnsubscribe(
   return jsonOk({ success: true });
 }
 
-export async function mailDetailJson(id: string, env: Env, hostname: string): Promise<Response> {
-  const toAddressLike = getToAddressLikePattern(hostname, env.ADMIN_MAIL_HOSTS);
-  if (!toAddressLike) {
-    return jsonError("Mail Not Found", 404, "MAIL_NOT_FOUND");
-  }
+export async function mailDetailJson(id: string, env: Env, access: MailAccess | string): Promise<Response> {
+  const scope = mailWhere(resolveAccess(env, access));
 
   const row = await env.DB.prepare(
     `SELECT id, received_at, timestamp, from_address, to_address, subject, reference_json, attachments_json, headers_json, raw_text
      FROM mails
-     WHERE id = ? AND folder = 'inbox' AND to_address LIKE ?`
+     WHERE id = ? AND (${scope.sql})`
   )
-    .bind(id, toAddressLike)
+    .bind(id, ...scope.values)
     .first<{
       id: string;
       received_at: string;
@@ -510,18 +533,15 @@ export async function mailDetailJson(id: string, env: Env, hostname: string): Pr
   return jsonOk({ mail, view });
 }
 
-export async function downloadAttachment(id: string, attachmentId: string, env: Env, hostname: string): Promise<Response> {
-  const toAddressLike = getToAddressLikePattern(hostname, env.ADMIN_MAIL_HOSTS);
-  if (!toAddressLike) {
-    return jsonError("Mail Not Found", 404, "MAIL_NOT_FOUND");
-  }
+export async function downloadAttachment(id: string, attachmentId: string, env: Env, access: MailAccess | string): Promise<Response> {
+  const scope = mailWhere(resolveAccess(env, access));
 
   const row = await env.DB.prepare(
     `SELECT attachments_json
      FROM mails
-     WHERE id = ? AND folder = 'inbox' AND to_address LIKE ?`
+     WHERE id = ? AND (${scope.sql})`
   )
-    .bind(id, toAddressLike)
+    .bind(id, ...scope.values)
     .first<{ attachments_json: string }>();
 
   if (!row) {

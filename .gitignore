@@ -15,6 +15,7 @@ package.json
 # SQL / local databases
 *.sql.bak
 *.sql
+!migrations/*.sql
 *.sqlite
 *.sqlite3
 *.db
@@ -23,6 +24,7 @@ package.json
 # Environment / secrets
 .env
 .env.*
+.dev.vars*
 *.pem
 *.key
 *.crt
@@ -81,3 +83,4 @@ Thumbs.db
 !*.example
 3.4.17
 req.md
+tests/

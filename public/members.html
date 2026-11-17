@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title data-i18n="members.title">Members</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="css/styles.css" />
+  </head>
+  <body>
+    <main class="app-container" data-component="members-page">
+      <div class="preferences-toolbar" role="group" aria-label="Interface preferences" data-i18n-aria-label="settings.label">
+        <label class="preference-field" for="language-select">
+          <span id="language-label" data-i18n="settings.language">Language</span>
+          <select id="language-select" aria-labelledby="language-label" class="form-input form-select" data-action="change-language" disabled>
+            <option>Loading…</option>
+          </select>
+        </label>
+        <label class="preference-field" for="timezone-select">
+          <span id="timezone-label" data-i18n="settings.timeZone">Time zone</span>
+          <select id="timezone-select" aria-labelledby="timezone-label" class="form-input form-select" data-action="change-timezone" disabled>
+            <option>UTC+08:00</option>
+          </select>
+        </label>
+      </div>
+      <div class="member-brand"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg><span>Email Worker</span></div>
+      <header class="page-header"><div><h1 class="page-title" data-i18n="members.title">Members</h1><p class="page-subtitle" data-i18n="members.subtitle">Create accounts and assign receive and send domains.</p></div><button class="btn btn-primary" type="button" data-action="new-member" data-i18n="members.add">+ Add member</button></header>
+      <div id="load-error" class="status-alert status-alert-danger hidden" role="alert"></div>
+      <div class="member-layout">
+        <section class="member-list-panel" aria-labelledby="member-list-title">
+          <div class="member-list-heading"><h2 id="member-list-title" data-i18n="members.title">Members</h2><span id="member-count" class="page-subtitle"></span></div>
+          <div class="member-search"><input id="member-search" class="form-input" type="search" maxlength="200" data-action="member-search" data-i18n-placeholder="members.search" placeholder="Search account or domain…" aria-label="Search members" data-i18n-aria-label="members.search" /></div>
+          <div class="member-table-scroll"><table class="member-table"><thead><tr><th data-i18n="members.prefix">Account / prefix</th><th data-i18n="members.domains">Allowed domains</th><th data-i18n="members.status">Status</th><th data-i18n="members.actions">Actions</th></tr></thead><tbody id="member-rows"></tbody></table></div>
+          <p id="members-empty" class="empty-state hidden" data-i18n="members.empty">No members yet. Create the first account.</p>
+          <nav class="pagination member-pagination" data-i18n-aria-label="members.pagination" aria-label="Member pages"><button class="btn" id="member-prev" data-action="member-prev" type="button" data-i18n="inbox.previous">Previous</button><span id="member-page" class="page-indicator"></span><button class="btn" id="member-next" data-action="member-next" type="button" data-i18n="inbox.next">Next</button></nav>
+        </section>
+        <section class="member-editor" aria-labelledby="member-editor-title">
+          <header class="member-editor-heading"><h2 id="member-editor-title" data-i18n="members.addTitle">Add member</h2><p class="page-subtitle" data-i18n="members.editorDescription">Set up an account and its mailbox permissions.</p></header>
+          <form method="post" id="member-form" class="member-form" data-action="save-member">
+            <label for="member-prefix" data-i18n="members.prefix">Account / prefix</label><input id="member-prefix" class="form-input" autocomplete="off" maxlength="64" pattern="[a-zA-Z0-9][a-zA-Z0-9._-]*" required /><p class="field-hint" data-i18n="members.prefixHint">Cannot be changed after creation.</p>
+            <label for="member-role" data-i18n="members.role">Role</label><select id="member-role" class="form-input"><option value="user" data-i18n="auth.user">Member</option><option value="admin" data-i18n="auth.admin">Admin</option></select><p class="field-hint" data-i18n="members.roleHint">Admins can read all mail, use every send domain, and manage members. Domain assignment is not used.</p>
+            <div id="member-password-group"><div class="field-label-row"><label for="member-password" data-i18n="members.initialPassword">Initial password</label><button class="btn" type="button" data-action="generate-password" data-i18n="members.generate">Generate</button></div><div class="password-field"><input id="member-password" class="form-input" type="password" autocomplete="new-password" /><button class="btn password-toggle" type="button" data-action="toggle-password" data-target="member-password" data-i18n-aria-label="auth.showPassword" aria-label="Show password">◉</button></div><p class="field-hint" data-i18n="members.passwordHint">Leave blank to generate a password.</p><p class="first-login-note" data-i18n="members.firstLogin">✓ Password change required at first sign-in</p></div>
+            <div class="domain-editor"><h3 data-i18n="members.domains">Allowed domains</h3><p class="field-hint" data-i18n="members.domainsHint">Receive and send permissions are independent.</p><table class="domain-table"><thead><tr><th data-i18n="members.domain">Domain</th><th data-i18n="members.receive">Receive</th><th data-i18n="members.send">Send</th></tr></thead><tbody id="domain-options"></tbody></table><p class="field-hint" data-i18n="members.unavailable">— This capability is unavailable for this domain</p></div>
+            <p id="member-form-error" class="status-alert status-alert-danger hidden" role="alert"></p>
+            <div class="member-form-buttons"><button class="btn btn-primary" type="submit" disabled id="member-save" data-i18n="members.create">Create member</button><button class="btn" type="button" data-action="cancel-member" data-i18n="common.cancel">Cancel</button></div>
+          </form>
+        </section>
+      </div>
+      <dialog id="member-confirm" class="member-dialog"><form method="dialog"><h2 id="member-confirm-title"></h2><p id="member-confirm-description"></p><div class="member-form-buttons"><button id="member-confirm-submit" class="btn btn-primary" type="button" data-action="confirm-member-operation" data-i18n="members.confirm">Confirm</button><button class="btn" value="cancel" data-i18n="common.cancel">Cancel</button></div><p id="member-confirm-error" class="status-alert status-alert-danger hidden" role="alert"></p></form></dialog>
+      <dialog id="member-password-result" class="member-dialog"><form method="dialog"><h2 data-i18n="members.passwordReady">Initial password</h2><p data-i18n="members.passwordOnce">Copy this password now and share it with the member. It will not be shown again.</p><code id="initial-password-value" class="initial-password-value"></code><button class="btn btn-primary" value="close" data-i18n="members.done">Done</button></form></dialog>
+    </main>
+    <script src="lib/i18next.js"></script>
+    <script src="js/utils.js"></script>
+    <script src="js/api.js"></script>
+    <script src="js/app.js"></script>
+  </body>
+</html>
