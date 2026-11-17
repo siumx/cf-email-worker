@@ -11,7 +11,7 @@ const manifest = JSON.parse(read("public/locales/manifest.json"));
 const dictionaries = Object.fromEntries(manifest.map(({ code }) => [code, JSON.parse(read(`public/locales/${code}.json`))]));
 
 function browserContext(options = {}) {
-  const context = vm.createContext({ Intl, Date, console, setTimeout, clearTimeout, URLSearchParams, ...options });
+  const context = vm.createContext({ Intl, Date, console, setTimeout, clearTimeout, URL, URLSearchParams, ...options });
   context.window = context;
   for (const path of ["public/lib/i18next.js", "public/js/utils.js", "public/js/api.js"]) {
     vm.runInContext(read(path), context, { filename: path });
@@ -41,12 +41,19 @@ test("each registered language covers the UI keys and interpolation parameters",
       assert.deepEqual([...value.matchAll(/{{(\w+)}}/g)].map((m) => m[1]).sort(), expected.get(baseKey(key)), `${language}:${key}`);
     }
   }
-  const source = ["public/index.html", "public/mail.html", "public/js/app.js"].map(read).join("\n");
+  const source = ["public/index.html", "public/mail.html", "public/login.html", "public/password.html", "public/members.html", "public/js/app.js"].map(read).join("\n");
   for (const [, key] of source.matchAll(/data-i18n(?:-title|-placeholder|-aria-label)?="([a-zA-Z.]+)"/g)) {
     assert.ok(expected.has(key), `Missing UI key: ${key}`);
   }
-  for (const [, key] of source.matchAll(/"((?:common|settings|inbox|compose|mail|errors)\.[a-zA-Z.]+)"/g)) {
+  for (const [, key] of source.matchAll(/"((?:common|settings|inbox|compose|mail|errors|auth|members)\.[a-zA-Z.]+)"/g)) {
     assert.ok(expected.has(key), `Missing dynamic UI key: ${key}`);
+  }
+});
+
+test("login return paths stay within mailbox pages", () => {
+  assert.equal(utils.safeReturnPath("/mail.html?id=abc"), "/mail.html?id=abc");
+  for (const value of ["https://evil.example", "//evil.example", "/\\evil.example", "/login.html", "/api/send", null]) {
+    assert.equal(utils.safeReturnPath(value, "/members.html"), "/members.html");
   }
 });
 

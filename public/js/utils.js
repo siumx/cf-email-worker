@@ -59,8 +59,17 @@
       .replace(/'/g, "&#x27;");
   }
 
+  function safeReturnPath(value, fallback = "/") {
+    if (typeof value !== "string" || !value.startsWith("/") || value.startsWith("//") || value.includes("\\")) return fallback;
+    try {
+      const url = new URL(value, "https://webmail.invalid");
+      return url.origin === "https://webmail.invalid" && ["/", "/index.html", "/mail.html", "/members.html"].includes(url.pathname)
+        ? url.pathname + url.search : fallback;
+    } catch { return fallback; }
+  }
+
   window.MailUtils = {
     DEFAULT_LANGUAGE, DEFAULT_TIME_ZONE, normalizeTimeZone,
-    resolvePreferences, getTimeZones, formatDate, formatBytes, escapeHtml
+    resolvePreferences, getTimeZones, formatDate, formatBytes, escapeHtml, safeReturnPath
   };
 })();

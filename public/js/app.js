@@ -6,6 +6,7 @@
   const { escapeHtml } = utils;
   const actions = new Map();
   let preferences;
+  let mailConfig;
 
   const t = (key, params) => window.i18next.t(key, params);
   const formatDate = (iso, options) => utils.formatDate(iso, preferences.language, preferences.timeZone, options);
@@ -190,6 +191,22 @@
   async function start() {
     try {
       await initPreferences();
+      mailConfig = await api.getConfig();
+      const loginPage = document.querySelector('[data-component="login-page"]');
+      const membersPage = document.querySelector('[data-component="members-page"]');
+      const passwordPage = document.querySelector('[data-component="password-page"]');
+      if (!mailConfig.memberEnabled && (loginPage || membersPage || passwordPage)) { location.replace("/"); return; }
+      if (mailConfig.memberEnabled) {
+        if (!mailConfig.authenticated && !loginPage) { goToLogin(); return; }
+        if (mailConfig.identity?.mustChangePassword && !passwordPage) { location.replace("/password.html"); return; }
+        if (loginPage && mailConfig.authenticated) { location.replace(afterLogin(mailConfig.identity)); return; }
+        if (membersPage && mailConfig.identity?.role !== "admin") { location.replace("/"); return; }
+        if (passwordPage && mailConfig.identity?.role !== "user") { location.replace("/"); return; }
+        if (mailConfig.authenticated) initMemberToolbar();
+      }
+      if (loginPage) initLogin();
+      if (passwordPage) initPasswordChange();
+      if (membersPage) await initMembers();
       if (document.querySelector('[data-component="inbox-page"]')) initInbox();
       if (document.querySelector('[data-component="mail-detail-page"]')) initMailDetail();
     } catch (error) {
@@ -198,6 +215,256 @@
       alert.classList.remove("hidden");
       alert.textContent = "Could not load interface settings. Please reload.";
     }
+  }
+
+  function goToLogin() {
+    const next = utils.safeReturnPath(location.pathname + location.search);
+    location.replace(`/login.html?next=${encodeURIComponent(next)}`);
+  }
+
+  function afterLogin(identity) {
+    if (identity.mustChangePassword) return "/password.html";
+    const next = new URLSearchParams(location.search).get("next");
+    return utils.safeReturnPath(next, identity.role === "admin" ? "/members.html" : "/");
+  }
+
+  window.addEventListener("mail-auth-required", (event) => {
+    if (event.detail === "PASSWORD_CHANGE_REQUIRED") location.replace("/password.html");
+    else goToLogin();
+  });
+
+  window.addEventListener("pagehide", () => {
+    if (mailConfig?.memberEnabled) document.querySelector("main")?.setAttribute("hidden", "");
+  });
+  window.addEventListener("pageshow", (event) => {
+    if (event.persisted) location.reload();
+  });
+
+  actions.set("toggle-password", (event, button) => {
+    const input = document.getElementById(button.dataset.target);
+    input.type = input.type === "password" ? "text" : "password";
+    button.setAttribute("aria-pressed", String(input.type === "text"));
+    button.dataset.i18nAriaLabel = input.type === "text" ? "auth.hidePassword" : "auth.showPassword";
+    translate();
+  });
+
+  function initMemberToolbar() {
+    const identity = mailConfig.identity;
+    const toolbar = document.createElement("nav");
+    toolbar.className = "member-toolbar";
+    toolbar.dataset.i18nAriaLabel = "auth.navigation";
+    toolbar.setAttribute("aria-label", t("auth.navigation"));
+    toolbar.innerHTML = `<div class="member-navigation"><a class="btn" href="/" data-i18n="members.allMail">${escapeHtml(t("members.allMail"))}</a>
+      ${identity.role === "admin" ? `<a class="btn ${location.pathname === "/members.html" ? "btn-pressed" : ""}" href="/members.html" data-i18n="members.title">${escapeHtml(t("members.title"))}</a>` : ""}</div>
+      <div class="member-session"><span class="member-account">${escapeHtml(identity.prefix)}</span><span class="member-role" data-i18n="auth.${identity.role}">${escapeHtml(t(`auth.${identity.role}`))}</span>
+      ${identity.role === "user" && !identity.mustChangePassword ? `<a class="btn" href="/password.html" data-i18n="auth.changePassword">${escapeHtml(t("auth.changePassword"))}</a>` : ""}
+      <button class="btn" data-action="logout" type="button" data-i18n="auth.signOut">${escapeHtml(t("auth.signOut"))}</button></div>`;
+    const anchor = document.querySelector(".page-header") || document.querySelector(".preferences-toolbar");
+    if (anchor) anchor.after(toolbar);
+    actions.set("logout", async (event, button) => {
+      button.disabled = true;
+      try { await api.logout(); mailConfig.authenticated = false; api.saveMemberDraft(identity.id, null); location.replace("/login.html"); }
+      catch (error) { notifyError("auth.error", error); button.disabled = false; }
+    });
+  }
+
+  function initLogin() {
+    document.addEventListener("submit", async (event) => {
+      if (event.target.dataset.action !== "login") return;
+      event.preventDefault();
+      const button = event.target.querySelector('[type="submit"]');
+      if (button.disabled) return;
+      button.disabled = true;
+      document.getElementById("auth-error").classList.add("hidden");
+      try {
+        const result = await api.login(document.getElementById("login-prefix").value.trim(), document.getElementById("login-password").value);
+        document.getElementById("login-password").value = "";
+        location.replace(afterLogin(result.identity));
+      } catch (error) { showError(document.getElementById("auth-error"), "auth.error", error); }
+      finally { button.disabled = false; }
+    });
+    document.querySelector('#login-form [type="submit"]').disabled = false;
+  }
+
+  function initPasswordChange() {
+    document.getElementById("password-required").classList.toggle("hidden", !mailConfig.identity.mustChangePassword);
+    document.addEventListener("submit", async (event) => {
+      if (event.target.dataset.action !== "change-password") return;
+      event.preventDefault();
+      const form = event.target;
+      const button = form.querySelector('[type="submit"]');
+      if (button.disabled) return;
+      const password = document.getElementById("new-password").value;
+      if (password !== document.getElementById("confirm-password").value) {
+        showError(document.getElementById("auth-error"), "auth.error", { code: "PASSWORD_MISMATCH" }); return;
+      }
+      button.disabled = true;
+      try {
+        await api.changePassword(document.getElementById("current-password").value, password);
+        form.reset(); location.replace("/");
+      } catch (error) { showError(document.getElementById("auth-error"), "auth.error", error); }
+      finally { button.disabled = false; }
+    });
+    document.querySelector('#password-form [type="submit"]').disabled = false;
+  }
+
+  async function initMembers() {
+    const form = document.getElementById("member-form");
+    const prefixInput = document.getElementById("member-prefix");
+    const passwordInput = document.getElementById("member-password");
+    const rows = document.getElementById("member-rows");
+    const errorElement = document.getElementById("member-form-error");
+    const resultDialog = document.getElementById("member-password-result");
+    const confirmDialog = document.getElementById("member-confirm");
+    let members = [];
+    let domainConfig = { receiveDomains: [], sendDomains: [] };
+    let editingId = null;
+    let currentPage = 1;
+    let query = "";
+    let busy = false;
+    let pendingOperation = null;
+    let loadSequence = 0;
+
+    function domainInputs(receive = [], send = []) {
+      const domains = [...new Set([...domainConfig.receiveDomains, ...domainConfig.sendDomains])];
+      document.getElementById("domain-options").innerHTML = domains.map((domain) => `<tr><td>${escapeHtml(domain)}</td>${["receive", "send"].map((direction) => {
+        const available = domainConfig[`${direction}Domains`].includes(domain);
+        const checked = (direction === "receive" ? receive : send).includes(domain);
+        return `<td>${available ? `<input type="checkbox" name="${direction}Domains" value="${escapeHtml(domain)}" ${checked ? "checked" : ""} data-i18n-aria-label="members.${direction}Domain" data-i18n-params="${escapeHtml(JSON.stringify({ domain }))}" aria-label="${escapeHtml(t(`members.${direction}Domain`, { domain }))}" />` : '<span aria-hidden="true">—</span>'}</td>`;
+      }).join("")}</tr>`).join("");
+    }
+
+    function selectedDomains(direction) { return [...form.querySelectorAll(`input[name="${direction}Domains"]:checked`)].map((input) => input.value); }
+
+    function persistDraft() {
+      if (busy || !mailConfig.authenticated) return;
+      const prefix = prefixInput.value;
+      const receiveDomains = selectedDomains("receive");
+      const sendDomains = selectedDomains("send");
+      api.saveMemberDraft(mailConfig.identity.id, prefix || editingId || receiveDomains.length || sendDomains.length
+        ? { editingId, prefix, receiveDomains, sendDomains } : null);
+    }
+
+    function resetEditor(member = null) {
+      if (busy) return;
+      editingId = member?.id ?? null;
+      form.reset();
+      prefixInput.value = member?.prefix ?? "";
+      prefixInput.readOnly = Boolean(member);
+      passwordInput.type = "password";
+      const passwordToggle = form.querySelector('[data-action="toggle-password"]');
+      passwordToggle.dataset.i18nAriaLabel = "auth.showPassword";
+      passwordToggle.setAttribute("aria-label", t("auth.showPassword"));
+      passwordToggle.setAttribute("aria-pressed", "false");
+      document.getElementById("member-password-group").classList.toggle("hidden", Boolean(member));
+      setMessage(document.getElementById("member-editor-title"), member ? "members.editTitle" : "members.addTitle");
+      setMessage(document.getElementById("member-save"), member ? "members.save" : "members.create");
+      domainInputs(member?.receiveDomains, member?.sendDomains);
+      errorElement.classList.add("hidden");
+      persistDraft();
+    }
+
+    async function load(page = currentPage) {
+      const sequence = ++loadSequence;
+      const data = await api.getMembers(page, query);
+      if (sequence !== loadSequence) return;
+      members = data.members;
+      domainConfig = data;
+      currentPage = data.page;
+      setMessage(document.getElementById("member-count"), "members.count", { total: data.total, active: data.active, disabled: data.total - data.active });
+      setMessage(document.getElementById("member-page"), "inbox.page", { page: data.totalPages ? data.page : 0, total: data.totalPages });
+      document.getElementById("member-prev").disabled = data.page <= 1;
+      document.getElementById("member-next").disabled = !data.totalPages || data.page >= data.totalPages;
+      document.getElementById("members-empty").classList.toggle("hidden", members.length > 0);
+      rows.innerHTML = members.map((member) => `<tr><td><strong>${escapeHtml(member.prefix)}</strong><time datetime="${escapeHtml(member.createdAt)}">${escapeHtml(formatDate(member.createdAt))}</time></td>
+        <td><span class="member-domain-line"><span data-i18n="members.receive">${escapeHtml(t("members.receive"))}</span> ${escapeHtml(member.receiveDomains.join(" · ") || "—")}</span><span class="member-domain-line"><span data-i18n="members.send">${escapeHtml(t("members.send"))}</span> ${escapeHtml(member.sendDomains.join(" · ") || "—")}</span></td>
+        <td><span class="member-status ${member.status === "disabled" ? "is-disabled" : ""}" data-i18n="members.${member.status}">${escapeHtml(t(`members.${member.status}`))}</span></td>
+        <td><details class="member-actions"><summary data-i18n-aria-label="members.actionsFor" data-i18n-params="${escapeHtml(JSON.stringify({ prefix: member.prefix }))}" aria-label="${escapeHtml(t("members.actionsFor", { prefix: member.prefix }))}">•••</summary><div class="member-menu">
+        ${["edit", "reset", member.status === "active" ? "disable" : "enable", "delete"].map((operation) => `<button class="btn ${operation === "delete" ? "member-danger" : ""}" type="button" data-action="member-operation" data-id="${escapeHtml(member.id)}" data-operation="${operation}" data-i18n="members.${operation}">${escapeHtml(t(`members.${operation}`))}</button>`).join("")}</div></details></td></tr>`).join("");
+    }
+
+    function showInitialPassword(password) {
+      document.getElementById("initial-password-value").textContent = password;
+      resultDialog.showModal();
+    }
+    resultDialog.addEventListener("close", () => { document.getElementById("initial-password-value").textContent = ""; });
+    confirmDialog.addEventListener("close", () => { if (!busy) pendingOperation = null; });
+
+    actions.set("new-member", () => { resetEditor(); prefixInput.focus(); });
+    actions.set("cancel-member", () => resetEditor());
+    actions.set("generate-password", () => { passwordInput.value = api.generatePassword(); passwordInput.type = "text"; });
+    actions.set("member-prev", async () => { try { await load(currentPage - 1); } catch (error) { notifyError("members.error", error); } });
+    actions.set("member-next", async () => { try { await load(currentPage + 1); } catch (error) { notifyError("members.error", error); } });
+    actions.set("member-operation", (event, button) => {
+      if (busy) return;
+      const member = members.find((item) => item.id === button.dataset.id);
+      if (!member) return;
+      button.closest("details").open = false;
+      const operation = button.dataset.operation;
+      if (operation === "edit") { resetEditor(member); prefixInput.focus(); return; }
+      pendingOperation = { id: member.id, operation };
+      setMessage(document.getElementById("member-confirm-title"), `members.${operation}`);
+      setMessage(document.getElementById("member-confirm-description"), operation === "delete" ? "members.deleteDescription" : "members.operationDescription", { prefix: member.prefix });
+      document.getElementById("member-confirm-error").classList.add("hidden");
+      confirmDialog.showModal();
+    });
+    actions.set("confirm-member-operation", async (event, button) => {
+      if (busy || !pendingOperation) return;
+      const { id, operation } = pendingOperation;
+      busy = true; button.disabled = true;
+      try {
+        let result;
+        if (operation === "delete") result = await api.deleteMember(id);
+        else if (operation === "reset") result = await api.resetMemberPassword(id);
+        else result = await api.updateMember(id, { status: operation === "enable" ? "active" : "disabled" });
+        pendingOperation = null;
+        confirmDialog.close();
+        busy = false;
+        if (editingId === id) resetEditor();
+        if (result.initialPassword) showInitialPassword(result.initialPassword);
+        else notify("members.updated", "success");
+        await load().catch((error) => notifyError("members.error", error));
+      } catch (error) { showError(document.getElementById("member-confirm-error"), "members.error", error); }
+      finally { busy = false; button.disabled = false; }
+    });
+    document.addEventListener("submit", async (event) => {
+      if (event.target !== form) return;
+      event.preventDefault();
+      if (busy) return;
+      const body = { receiveDomains: selectedDomains("receive"), sendDomains: selectedDomains("send") };
+      busy = true;
+      const button = document.getElementById("member-save");
+      button.disabled = true;
+      try {
+        const result = editingId ? await api.updateMember(editingId, body) : await api.createMember({ ...body, prefix: prefixInput.value, password: passwordInput.value });
+        api.saveMemberDraft(mailConfig.identity.id, null);
+        busy = false; resetEditor();
+        if (result.initialPassword) showInitialPassword(result.initialPassword);
+        else notify("members.updated", "success");
+        await load(1).catch((error) => notifyError("members.error", error));
+      } catch (error) { showError(errorElement, "members.error", error); }
+      finally { busy = false; button.disabled = false; }
+    });
+    let searchTimeout;
+    document.addEventListener("input", (event) => {
+      if (event.target.dataset.action === "member-search") {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(async () => { query = event.target.value.trim(); try { await load(1); } catch (error) { notifyError("members.error", error); } }, 300);
+      } else if (form.contains(event.target)) persistDraft();
+    });
+    form.addEventListener("change", persistDraft);
+    const draft = api.readMemberDraft(mailConfig.identity.id);
+    await load(1);
+    domainInputs();
+    if (draft && typeof draft.prefix === "string" && Array.isArray(draft.receiveDomains) && Array.isArray(draft.sendDomains)) {
+      const member = draft.editingId ? members.find((item) => item.id === draft.editingId) : null;
+      if (!draft.editingId || member) {
+        resetEditor(member); prefixInput.value = draft.prefix; domainInputs(draft.receiveDomains, draft.sendDomains);
+      }
+    }
+    const heartbeat = setInterval(persistDraft, 15000);
+    window.addEventListener("pagehide", () => { persistDraft(); clearInterval(heartbeat); });
+    document.getElementById("member-save").disabled = false;
   }
 
   function initInbox() {
@@ -213,6 +480,7 @@
 
     let currentPage = 1;
     let currentQuery = "";
+    let currentFolder = mailConfig.memberEnabled && new URLSearchParams(location.search).get("folder") === "sent" ? "sent" : "inbox";
     let inFlightAbort = null;
 
     function readUrlState() {
@@ -228,6 +496,7 @@
       const p = new URLSearchParams();
       if (page > 1) p.set("page", String(page));
       if (q) p.set("q", q);
+      if (currentFolder !== "inbox") p.set("folder", currentFolder);
       const qs = p.toString();
       const path = location.pathname || "/";
       const next = qs ? `${path}?${qs}` : path;
@@ -275,7 +544,7 @@
       setLoading(4);
 
       try {
-        const data = await api.getMails(page, currentQuery, signal);
+        const data = await api.getMails(page, currentQuery, signal, currentFolder);
         const mails = data.mails ?? [];
         currentPage = data.page ?? page;
         setPaginationControls(data.page, data.totalPages);
@@ -294,6 +563,7 @@
           mailQs.set("id", m.id);
           mailQs.set("page", String(currentPage));
           if (currentQuery) mailQs.set("q", currentQuery);
+          if (currentFolder !== "inbox") mailQs.set("folder", currentFolder);
           a.href = `/mail.html?${mailQs.toString()}`;
           a.className = "mail-card";
 
@@ -431,6 +701,7 @@
 
     function resetCompose() {
       composeForm.reset();
+      if (mailConfig.identity?.role === "user") document.getElementById("compose-from-local").value = mailConfig.identity.prefix;
       composeAttachments = [];
       renderAttachmentList();
     }
@@ -591,6 +862,17 @@
       }
     });
 
+    if (mailConfig.memberEnabled) {
+      const tabs = document.createElement("div");
+      tabs.className = "tabs folder-tabs";
+      tabs.innerHTML = ["inbox", "sent"].map((folder) => `<button type="button" class="tab-btn ${currentFolder === folder ? "active" : ""}" data-action="mail-folder" data-folder="${folder}" data-i18n="auth.${folder}">${escapeHtml(t(`auth.${folder}`))}</button>`).join("");
+      document.querySelector(".search-wrap").before(tabs);
+      actions.set("mail-folder", (event, button) => {
+        currentFolder = button.dataset.folder;
+        for (const tab of tabs.children) tab.classList.toggle("active", tab === button);
+        loadMails(1);
+      });
+    }
     readUrlState();
     loadMails(currentPage);
     updateAutoRefreshUi();
@@ -598,7 +880,13 @@
     async function initFromDomainSelect() {
       const select = document.getElementById("compose-from-domain");
       try {
-        const config = await api.getConfig();
+        const config = mailConfig;
+        if (config.identity?.role === "user") {
+          const local = document.getElementById("compose-from-local");
+          local.value = config.identity.prefix;
+          local.defaultValue = config.identity.prefix;
+          local.readOnly = true;
+        }
         for (const domain of config.sendableDomains) {
           const option = document.createElement("option");
           option.value = domain;
@@ -630,6 +918,7 @@
     const id = params.get("id");
     const pageParam = params.get("page");
     const qParam = params.get("q");
+    const folderParam = params.get("folder");
     const errEl = document.getElementById("err");
     const contentEl = document.getElementById("content");
     const backLink = document.getElementById("back-link");
@@ -638,6 +927,7 @@
       const backParams = new URLSearchParams();
       if (pageParam) backParams.set("page", pageParam);
       if (qParam) backParams.set("q", qParam);
+      if (folderParam === "sent" && mailConfig.memberEnabled) backParams.set("folder", "sent");
       const qs = backParams.toString();
       backLink.href = qs ? `/?${qs}` : "/";
     }

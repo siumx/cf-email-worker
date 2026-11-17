@@ -16,6 +16,7 @@ export async function storeMailToD1(env: Env, params: {
   attachmentsJson: string;
   referenceJson: string;
   folder: MailFolder;
+  ownerMemberId?: string;
 }): Promise<void> {
   let dbRawText = params.rawText;
   if (params.attachmentCount > 0 || params.rawText.length > 100000) {
@@ -27,9 +28,10 @@ export async function storeMailToD1(env: Env, params: {
     dbRawText = `[[R2:${r2RawKey}]]`;
   }
 
+  const ownerColumn = params.ownerMemberId ? ", owner_member_id" : "";
   await env.DB.prepare(
-    `INSERT INTO mails (id, message_id, received_at, timestamp, from_address, to_address, subject, headers_json, raw_text, attachment_count, attachments_json, reference_json, folder)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO mails (id, message_id, received_at, timestamp, from_address, to_address, subject, headers_json, raw_text, attachment_count, attachments_json, reference_json, folder${ownerColumn})
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?${params.ownerMemberId ? ", ?" : ""})`
   )
     .bind(
       params.id,
@@ -44,7 +46,8 @@ export async function storeMailToD1(env: Env, params: {
       params.attachmentCount,
       params.attachmentsJson,
       params.referenceJson,
-      params.folder
+      params.folder,
+      ...(params.ownerMemberId ? [params.ownerMemberId] : [])
     )
     .run();
 }
