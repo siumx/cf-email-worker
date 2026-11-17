@@ -1260,6 +1260,7 @@ body {
 .member-toolbar, .member-navigation, .member-session { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 .member-toolbar { justify-content: space-between; margin: 0 0 28px; }
 .member-role { border: 1px solid var(--accent-border); border-radius: 20px; background: var(--accent-subtle); color: var(--fg-secondary); font-size: 12px; padding: 3px 12px; }
+.member-table .member-role { display: inline-block; margin-top: 8px; }
 .member-account { color: var(--fg); font-size: 13px; overflow-wrap: anywhere; }
 .member-layout { display: grid; grid-template-columns: minmax(0, 1fr) 400px; align-items: start; gap: 24px; }
 .member-list-panel, .member-editor { min-width: 0; border: 1px solid var(--border); border-radius: var(--seed-radius); background: var(--surface); }

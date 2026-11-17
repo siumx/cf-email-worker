@@ -5,6 +5,12 @@ import type { MemberConfig, MemberRow } from "./auth";
 import { ApiError, normalizePrefix, readJson, requireIdentity, requireSameOrigin } from "./auth";
 import { createPasswordRecord, generatePassword, validPassword } from "./passwords";
 
+function requestedRole(value: unknown): "user" | "admin" | undefined {
+  if (value === undefined) return undefined;
+  if (value === "user" || value === "admin") return value;
+  throw new ApiError(400, "INVALID_REQUEST");
+}
+
 function assignedDomains(value: unknown, allowed: string[]): string[] {
   if (!Array.isArray(value) || value.length > 50 || value.some((domain) => typeof domain !== "string")) throw new ApiError(400, "DOMAIN_NOT_ALLOWED");
   const domains = [...new Set((value as string[]).map((domain) => domain.trim().toLowerCase()))];
@@ -29,14 +35,15 @@ async function listMembers(env: Env, config: MemberConfig, url: URL): Promise<Re
   const total = Number(counts?.total ?? 0);
   const totalPages = Math.ceil(total / LIST_PAGE_SIZE);
   const page = Math.min(requestedPage, totalPages || 1);
-  const { results: rows } = await env.DB.prepare(`SELECT id, prefix, status, must_change_password, created_at, updated_at
+  const { results: rows } = await env.DB.prepare(`SELECT id, prefix, status, role, must_change_password, created_at, updated_at
     FROM members WHERE status != 'deleted'${search} ORDER BY created_at DESC, id LIMIT ? OFFSET ?`)
     .bind(...values, LIST_PAGE_SIZE, (page - 1) * LIST_PAGE_SIZE).all<MemberRow>();
   const ids = rows.map((row) => row.id);
   const domains = ids.length ? (await env.DB.prepare(`SELECT member_id, domain, can_receive, can_send FROM member_domains WHERE member_id IN (${ids.map(() => "?").join(", ")})`)
     .bind(...ids).all<{ member_id: string; domain: string; can_receive: number; can_send: number }>()).results : [];
   return jsonOk({ members: rows.map((row) => ({
-    id: row.id, prefix: row.prefix, status: row.status, mustChangePassword: Boolean(row.must_change_password), createdAt: row.created_at, updatedAt: row.updated_at,
+    id: row.id, prefix: row.prefix, status: row.status, role: row.role === "admin" ? "admin" : "user",
+    mustChangePassword: Boolean(row.must_change_password), createdAt: row.created_at, updatedAt: row.updated_at,
     receiveDomains: domains.filter((domain) => domain.member_id === row.id && domain.can_receive).map((domain) => domain.domain),
     sendDomains: domains.filter((domain) => domain.member_id === row.id && domain.can_send).map((domain) => domain.domain)
   })), receiveDomains: config.receiveDomains, sendDomains: config.sendDomains,
@@ -52,9 +59,10 @@ export async function handleMembers(request: Request, env: Env, config: MemberCo
     const body = await readJson(request);
     const prefix = normalizePrefix(body.prefix);
     if (prefix === config.admin) throw new ApiError(400, "PREFIX_RESERVED");
-    const receive = assignedDomains(body.receiveDomains, config.receiveDomains);
-    const send = assignedDomains(body.sendDomains, config.sendDomains);
-    if (!receive.length && !send.length) throw new ApiError(400, "DOMAIN_REQUIRED");
+    const role = requestedRole(body.role) ?? "user";
+    const receive = role === "admin" ? [] : assignedDomains(body.receiveDomains, config.receiveDomains);
+    const send = role === "admin" ? [] : assignedDomains(body.sendDomains, config.sendDomains);
+    if (role === "user" && !receive.length && !send.length) throw new ApiError(400, "DOMAIN_REQUIRED");
     const password = body.password === undefined || body.password === "" ? generatePassword() : body.password;
     if (!validPassword(password)) throw new ApiError(400, "INVALID_PASSWORD");
     const record = await createPasswordRecord(password, config.pepper);
@@ -62,8 +70,8 @@ export async function handleMembers(request: Request, env: Env, config: MemberCo
     const now = new Date().toISOString();
     try {
       await env.DB.batch([
-        env.DB.prepare(`INSERT INTO members (id, prefix, password_record, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`)
-          .bind(id, prefix, record, now, now), ...domainStatements(env, id, receive, send)
+        env.DB.prepare(`INSERT INTO members (id, prefix, password_record, role, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)`)
+          .bind(id, prefix, record, role, now, now), ...domainStatements(env, id, receive, send)
       ]);
     } catch (error) {
       if (String(error).includes("UNIQUE constraint failed: members.prefix")) throw new ApiError(409, "PREFIX_TAKEN");
@@ -97,12 +105,16 @@ export async function handleMembers(request: Request, env: Env, config: MemberCo
   }
   if (request.method !== "PATCH") throw new ApiError(405, "METHOD_NOT_ALLOWED");
   const body = await readJson(request);
+  const role = requestedRole(body.role);
   if ((body.prefix !== undefined && body.prefix !== member.prefix) ||
     (body.status !== undefined && body.status !== "active" && body.status !== "disabled")) throw new ApiError(400, "INVALID_REQUEST");
-  const changes: D1PreparedStatement[] = [env.DB.prepare(`UPDATE members SET status = COALESCE(?, status),
-    auth_version = auth_version + CASE WHEN ? IS NOT NULL AND status != ? THEN 1 ELSE 0 END, updated_at = ?
-    WHERE id = ? AND status != 'deleted'`).bind(body.status ?? null, body.status ?? null, body.status ?? null, new Date().toISOString(), id)];
-  if (body.receiveDomains !== undefined || body.sendDomains !== undefined) {
+  const nextRole = role ?? (member.role === "admin" ? "admin" : "user");
+  const changes: D1PreparedStatement[] = [env.DB.prepare(`UPDATE members SET status = COALESCE(?, status), role = COALESCE(?, role),
+    auth_version = auth_version + CASE WHEN (? IS NOT NULL AND status != ?) OR (? IS NOT NULL AND role != ?) THEN 1 ELSE 0 END, updated_at = ?
+    WHERE id = ? AND status != 'deleted'`).bind(body.status ?? null, role ?? null, body.status ?? null, body.status ?? null, role ?? null, role ?? null, new Date().toISOString(), id)];
+  if (nextRole === "admin") changes.push(env.DB.prepare("DELETE FROM member_domains WHERE member_id = ?").bind(id));
+  else if (body.receiveDomains !== undefined || body.sendDomains !== undefined || (role === "user" && member.role === "admin")) {
+    if (role === "user" && member.role === "admin" && (!Array.isArray(body.receiveDomains) || !Array.isArray(body.sendDomains))) throw new ApiError(400, "DOMAIN_REQUIRED");
     const receive = assignedDomains(body.receiveDomains, config.receiveDomains);
     const send = assignedDomains(body.sendDomains, config.sendDomains);
     if (!receive.length && !send.length) throw new ApiError(400, "DOMAIN_REQUIRED");

@@ -173,6 +173,8 @@
     "empty": "尚未有會員，請建立第一個帳號。",
     "pagination": "會員分頁",
     "prefixHint": "建立後無法變更。",
+    "role": "權限",
+    "roleHint": "管理員可查看全部郵件、使用全部發件域名，並管理會員。不需要分配域名。",
     "initialPassword": "初始化密碼",
     "generate": "產生密碼",
     "passwordHint": "留空時會自動產生密碼。",

@@ -107,7 +107,6 @@ export async function handleSendEmail(request: Request, env: Env, access: MailAc
       return jsonError("Bad Request", 400, "INVALID_REQUEST");
     }
     for (const attachment of attachments) attachment.filename = sanitizeFilename(attachment.filename).replace(/["\\]/g, "_");
-    const ownerMemberId = scope.identity?.role === "user" ? scope.identity.id : undefined;
 
     // Build MIME message
     const messageId = `<${crypto.randomUUID()}@${fromDomain}>`;
@@ -216,8 +215,7 @@ export async function handleSendEmail(request: Request, env: Env, access: MailAc
         attachmentCount: storedAttachments.length,
         attachmentsJson: JSON.stringify(storedAttachments),
         referenceJson: JSON.stringify(sentReference),
-        folder: "sent",
-        ownerMemberId
+        folder: "sent"
       });
     }
 
@@ -268,8 +266,7 @@ export async function handleSendEmail(request: Request, env: Env, access: MailAc
         attachmentCount: 0,
         attachmentsJson: JSON.stringify([]),
         referenceJson: JSON.stringify(failReference),
-        folder: "inbox",
-        ownerMemberId
+        folder: "inbox"
       });
     }
 

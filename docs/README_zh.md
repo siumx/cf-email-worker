@@ -62,13 +62,7 @@ SENDABLE_DOMAINS = ["example.com", "notify.example.com"]
 
 MEMBER的admin 不寫入會員表，可查看全部已儲存郵件，使用全部發件域名，以及建立、禁用、刪除會員、分配域名和重設密碼。首次登入後建立第一位會員。會員帳號亦是固定的郵箱前綴，不分大小寫；例如 `user` 獲配 `example.com` 與 `abc.com` 收件權限，就只能讀取 `user@example.com` 和 `user@abc.com`。發件域名獨立分配，全域域名移除後會在下一次請求生效。
 
-新會員與被重設密碼的會員，須先修改初始化密碼才能使用郵箱。密碼以 scrypt（`N=16384, r=8, p=5`）加隨機 salt，再以 Worker Secret 中的 pepper 做 HMAC-SHA256。登入使用一小時的 HS256 JWT，放在 host-only、Secure、HttpOnly、SameSite Cookie，伺服器不保存登入狀態。禁用、刪除與改密會在下一次請求拒絕舊 token。登出只清除瀏覽器 Cookie；被複製的 token 在到期前仍然有效。admin 密碼或 pepper 變更會拒絕既有的 admin token。原生密碼雜湊需要足夠的 Worker CPU 額度，請在實際方案驗證。
-
-刪除會員會保留郵件並保留帳號前綴，避免重新分配後洩露舊信。既有收件依實際收件地址套用權限；沒有擁有人標記的舊寄件備份僅 admin 可見。新寄件與失敗通知會綁定寄件會員，因此只獲配發件域名的會員也能看到自己的通知。
-
-本機開發時，僅對全新的本機資料庫套用 `src/SQL/schema.sql`，再執行 `npm run db:migrate:local -- -c wrangler.toml` 和 `npx wrangler dev`。不要對既有資料庫重跑初始 schema。
-
-執行 `npm run typecheck` 與 `npm test` 檢查型別及授權行為；`npm run test:workers` 另在隔離的本機 Workers runtime 驗證原生密碼雜湊、migration 與 JWT，需要允許綁定 localhost 連接埠。
+新會員與被重設密碼的會員，須先修改初始化密碼才能使用郵箱。密碼以 scrypt（`N=16384, r=8, p=5`）加隨機 salt，再以 Worker Secret 中的 pepper 做 HMAC-SHA256。登入使用一小時的 HS256 JWT，放在 host-only、Secure、HttpOnly、SameSite Cookie，伺服器不保存登入狀態。
 
 ## 目錄
 

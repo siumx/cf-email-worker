@@ -45,38 +45,21 @@ After deploy, point the destination addresses or the catch-all in Cloudflare Ema
 
 Member mode applies **only to `ADMIN_MAIL_HOSTS`**. Other route hosts retain their existing catch-all view and cannot send, even with an admin session. They can still display all recipients in their matching domain, including member addresses. Without member mode, continue protecting admin hosts with Cloudflare Access.
 
-Keep `compatibility_flags = ["nodejs_compat"]` in your Wrangler config. To upgrade an existing database, apply the migration once using the config for that deployment; do not rerun the initial schema:
-
-```bash
-npm install
-npm run db:migrate:remote -- -c wrangler.toml
-npm run member:setup -- .dev.vars
-npx wrangler secret bulk .dev.vars -c wrangler.toml
-```
-
-The setup command prompts for a hidden admin password of 12–128 characters and saves a password hash, a random pepper, and a separate JWT key in `.dev.vars` with owner-only permissions. It preserves an existing pepper and JWT key when changing the admin password. Local secret files are ignored by Git. Use a separate file for each deployment, and do not change an existing pepper unless you intend to reset all member passwords.
-
-Enable member mode and choose the available domains:
+Enable member mode in the config, and set the receive and send domains separately:
 
 ```toml
 [vars]
 ADMIN_MAIL_HOSTS = ["mailadmin.example.com"]
-MEMBER = { enable = true, admin = "admin" }
+MEMBER = { enable = true, admin = "admin", password = "admin"} # <-- bootstrap admin; turn it off after setup
 RECEIVABLE_DOMAINS = ["example.com", "abc.com"]
 SENDABLE_DOMAINS = ["example.com", "notify.example.com"]
 ```
 
-Then deploy using your normal command. Missing `MEMBER`, `enable = false`, or no `admin` keeps legacy mode. When enabled, missing or malformed secrets return a configuration error instead of allowing anonymous admin access.
+Deploy with the existing command. If `MEMBER` is unset, `enable = false`, or `admin` is missing, the original mode stays. When member mode is enabled but a Secret is missing or malformed, the Worker returns a configuration error and does not grant anonymous admin access.
 
-The admin is configured outside the member table and can read all stored mail, send from every configured sender domain, and create, disable, delete, reset passwords, or change member domain permissions. Sign in to create the first member. The member's fixed, case-insensitive account prefix is also their mailbox prefix. For example, `user` with receive domains `example.com` and `abc.com` reads exactly `user@example.com` and `user@abc.com`. Send permissions are independent. Global domain removals take effect on the next request.
+The `MEMBER` admin is not stored in the member table. That account can read all stored mail, use every send domain, and create, disable, and delete members, assign domains, and reset passwords. Sign in and create the first member. A member account is a fixed mailbox prefix and is not case-sensitive. For example, `user` with receive access to `example.com` and `abc.com` can read only `user@example.com` and `user@abc.com`. Send domains are assigned separately. Removing a domain from the global list takes effect on the next request.
 
-New members and members whose passwords are reset must change their initial password before reading or sending. Passwords use scrypt (`N=16384, r=8, p=5`), a random salt, then HMAC-SHA256 with a pepper held in a Worker Secret. One-hour HS256 JWTs use host-only, Secure, HttpOnly, SameSite cookies and are not stored server-side. Disabling, deleting, and password changes reject existing tokens on the next request. Logout only clears the browser cookie; a copied token stays valid until it expires. Admin credential or pepper changes reject existing admin tokens. Native password hashing requires adequate Worker CPU budget; verify it under your deployed plan.
-
-Deleting a member retains their mail and reserves the prefix to prevent another account inheriting old mail. Existing inbound mail is matched by recipient; old sent copies without an owner remain admin-only. New sent copies and failure notices are tied to the sending member, including for send-only domains.
-
-For local development, apply `src/SQL/schema.sql` to a new local database, run `npm run db:migrate:local -- -c wrangler.toml`, then `npx wrangler dev`. Do not apply the initial schema to an existing database.
-
-Run `npm run typecheck` and `npm test` for type and authorization checks. `npm run test:workers` also verifies native crypto, migrations and JWTs in an isolated local Workers runtime; it requires permission to bind localhost ports.
+New members, and members whose passwords were reset, must change the initial password before using the mailbox. Passwords use scrypt (`N=16384, r=8, p=5`) with a random salt, then HMAC-SHA256 with the pepper in a Worker Secret. Login uses a one-hour HS256 JWT in a host-only, Secure, HttpOnly, SameSite cookie. The server does not store login state.
 
 ## Layout
 

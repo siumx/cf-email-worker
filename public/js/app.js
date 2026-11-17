@@ -201,7 +201,7 @@
         if (mailConfig.identity?.mustChangePassword && !passwordPage) { location.replace("/password.html"); return; }
         if (loginPage && mailConfig.authenticated) { location.replace(afterLogin(mailConfig.identity)); return; }
         if (membersPage && mailConfig.identity?.role !== "admin") { location.replace("/"); return; }
-        if (passwordPage && mailConfig.identity?.role !== "user") { location.replace("/"); return; }
+        if (passwordPage && !databaseMember(mailConfig.identity)) { location.replace("/"); return; }
         if (mailConfig.authenticated) initMemberToolbar();
       }
       if (loginPage) initLogin();
@@ -220,6 +220,10 @@
   function goToLogin() {
     const next = utils.safeReturnPath(location.pathname + location.search);
     location.replace(`/login.html?next=${encodeURIComponent(next)}`);
+  }
+
+  function databaseMember(identity) {
+    return Boolean(identity) && !identity.id.startsWith("admin:");
   }
 
   function afterLogin(identity) {
@@ -257,7 +261,7 @@
     toolbar.innerHTML = `<div class="member-navigation"><a class="btn" href="/" data-i18n="members.allMail">${escapeHtml(t("members.allMail"))}</a>
       ${identity.role === "admin" ? `<a class="btn ${location.pathname === "/members.html" ? "btn-pressed" : ""}" href="/members.html" data-i18n="members.title">${escapeHtml(t("members.title"))}</a>` : ""}</div>
       <div class="member-session"><span class="member-account">${escapeHtml(identity.prefix)}</span><span class="member-role" data-i18n="auth.${identity.role}">${escapeHtml(t(`auth.${identity.role}`))}</span>
-      ${identity.role === "user" && !identity.mustChangePassword ? `<a class="btn" href="/password.html" data-i18n="auth.changePassword">${escapeHtml(t("auth.changePassword"))}</a>` : ""}
+      ${databaseMember(identity) && !identity.mustChangePassword ? `<a class="btn" href="/password.html" data-i18n="auth.changePassword">${escapeHtml(t("auth.changePassword"))}</a>` : ""}
       <button class="btn" data-action="logout" type="button" data-i18n="auth.signOut">${escapeHtml(t("auth.signOut"))}</button></div>`;
     const anchor = document.querySelector(".page-header") || document.querySelector(".preferences-toolbar");
     if (anchor) anchor.after(toolbar);
@@ -336,13 +340,19 @@
 
     function selectedDomains(direction) { return [...form.querySelectorAll(`input[name="${direction}Domains"]:checked`)].map((input) => input.value); }
 
+    function selectedRole() { return document.getElementById("member-role").value === "admin" ? "admin" : "user"; }
+
+    function syncRoleFields() { document.querySelector(".domain-editor").classList.toggle("hidden", selectedRole() === "admin"); }
+
     function persistDraft() {
       if (busy || !mailConfig.authenticated) return;
+      syncRoleFields();
       const prefix = prefixInput.value;
+      const role = selectedRole();
       const receiveDomains = selectedDomains("receive");
       const sendDomains = selectedDomains("send");
-      api.saveMemberDraft(mailConfig.identity.id, prefix || editingId || receiveDomains.length || sendDomains.length
-        ? { editingId, prefix, receiveDomains, sendDomains } : null);
+      api.saveMemberDraft(mailConfig.identity.id, prefix || editingId || role === "admin" || receiveDomains.length || sendDomains.length
+        ? { editingId, prefix, role, receiveDomains, sendDomains } : null);
     }
 
     function resetEditor(member = null) {
@@ -357,9 +367,11 @@
       passwordToggle.setAttribute("aria-label", t("auth.showPassword"));
       passwordToggle.setAttribute("aria-pressed", "false");
       document.getElementById("member-password-group").classList.toggle("hidden", Boolean(member));
+      document.getElementById("member-role").value = member?.role === "admin" ? "admin" : "user";
       setMessage(document.getElementById("member-editor-title"), member ? "members.editTitle" : "members.addTitle");
       setMessage(document.getElementById("member-save"), member ? "members.save" : "members.create");
       domainInputs(member?.receiveDomains, member?.sendDomains);
+      syncRoleFields();
       errorElement.classList.add("hidden");
       persistDraft();
     }
@@ -376,7 +388,7 @@
       document.getElementById("member-prev").disabled = data.page <= 1;
       document.getElementById("member-next").disabled = !data.totalPages || data.page >= data.totalPages;
       document.getElementById("members-empty").classList.toggle("hidden", members.length > 0);
-      rows.innerHTML = members.map((member) => `<tr><td><strong>${escapeHtml(member.prefix)}</strong><time datetime="${escapeHtml(member.createdAt)}">${escapeHtml(formatDate(member.createdAt))}</time></td>
+      rows.innerHTML = members.map((member) => `<tr><td><strong>${escapeHtml(member.prefix)}</strong><span class="member-role" data-i18n="auth.${member.role === "admin" ? "admin" : "user"}">${escapeHtml(t(`auth.${member.role === "admin" ? "admin" : "user"}`))}</span><time datetime="${escapeHtml(member.createdAt)}">${escapeHtml(formatDate(member.createdAt))}</time></td>
         <td><span class="member-domain-line"><span data-i18n="members.receive">${escapeHtml(t("members.receive"))}</span> ${escapeHtml(member.receiveDomains.join(" · ") || "—")}</span><span class="member-domain-line"><span data-i18n="members.send">${escapeHtml(t("members.send"))}</span> ${escapeHtml(member.sendDomains.join(" · ") || "—")}</span></td>
         <td><span class="member-status ${member.status === "disabled" ? "is-disabled" : ""}" data-i18n="members.${member.status}">${escapeHtml(t(`members.${member.status}`))}</span></td>
         <td><details class="member-actions"><summary data-i18n-aria-label="members.actionsFor" data-i18n-params="${escapeHtml(JSON.stringify({ prefix: member.prefix }))}" aria-label="${escapeHtml(t("members.actionsFor", { prefix: member.prefix }))}">•••</summary><div class="member-menu">
@@ -431,7 +443,8 @@
       if (event.target !== form) return;
       event.preventDefault();
       if (busy) return;
-      const body = { receiveDomains: selectedDomains("receive"), sendDomains: selectedDomains("send") };
+      const role = selectedRole();
+      const body = role === "admin" ? { role } : { role, receiveDomains: selectedDomains("receive"), sendDomains: selectedDomains("send") };
       busy = true;
       const button = document.getElementById("member-save");
       button.disabled = true;
@@ -459,7 +472,9 @@
     if (draft && typeof draft.prefix === "string" && Array.isArray(draft.receiveDomains) && Array.isArray(draft.sendDomains)) {
       const member = draft.editingId ? members.find((item) => item.id === draft.editingId) : null;
       if (!draft.editingId || member) {
-        resetEditor(member); prefixInput.value = draft.prefix; domainInputs(draft.receiveDomains, draft.sendDomains);
+        resetEditor(member); prefixInput.value = draft.prefix;
+        if (draft.role === "admin" || draft.role === "user") document.getElementById("member-role").value = draft.role;
+        domainInputs(draft.receiveDomains, draft.sendDomains); syncRoleFields();
       }
     }
     const heartbeat = setInterval(persistDraft, 15000);

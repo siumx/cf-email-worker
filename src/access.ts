@@ -1,5 +1,5 @@
 import type { Env, MailFolder } from "./utils";
-import { getToAddressLikePattern, isAdminMailHost } from "./utils";
+import { escapeLikeForSql, getToAddressLikePattern, isAdminMailHost } from "./utils";
 
 export interface Identity {
   id: string;
@@ -42,6 +42,23 @@ export function legacyMailAccess(env: Env, hostname: string): MailAccess {
   };
 }
 
+function mailboxes(prefix: string, domains: string[]): string[] {
+  return domains.map((domain) => `${prefix}@${domain}`);
+}
+
+function addressIn(column: string, addresses: string[]): { sql: string; values: string[] } {
+  if (!addresses.length) return { sql: "0", values: [] };
+  return { sql: `${column} IN (${addresses.map(() => "?").join(", ")})`, values: addresses };
+}
+
+function sentFrom(addresses: string[]): { sql: string; values: string[] } {
+  if (!addresses.length) return { sql: "0", values: [] };
+  return {
+    sql: addresses.map(() => "(LOWER(from_address) = ? OR LOWER(from_address) LIKE '%<' || ? || '>' ESCAPE '\\')").join(" OR "),
+    values: addresses.flatMap((address) => [address, escapeLikeForSql(address)])
+  };
+}
+
 export function mailWhere(access: MailAccess, folder?: MailFolder): { sql: string; values: string[] } {
   const identity = access.identity;
   if (!access.memberEnabled) {
@@ -51,15 +68,12 @@ export function mailWhere(access: MailAccess, folder?: MailFolder): { sql: strin
   if (identity.role === "admin") {
     return folder ? { sql: "folder = ?", values: [folder] } : { sql: "folder IN ('inbox', 'sent')", values: [] };
   }
-  if (folder === "sent") return { sql: "folder = 'sent' AND owner_member_id = ?", values: [identity.id] };
-  const addresses = identity.receiveDomains.map((domain) => `${identity.prefix}@${domain}`);
-  const received = addresses.length
-    ? `owner_member_id IS NULL AND LOWER(TRIM(to_address)) IN (${addresses.map(() => "?").join(", ")})`
-    : "0";
+  const inbox = addressIn("LOWER(TRIM(to_address))", [...new Set([...mailboxes(identity.prefix, identity.receiveDomains), ...mailboxes(identity.prefix, identity.sendDomains)])]);
+  const sent = sentFrom(mailboxes(identity.prefix, identity.sendDomains));
+  if (folder === "inbox") return { sql: `folder = 'inbox' AND (${inbox.sql})`, values: inbox.values };
+  if (folder === "sent") return { sql: `folder = 'sent' AND (${sent.sql})`, values: sent.values };
   return {
-    sql: folder === "inbox"
-      ? `folder = 'inbox' AND (owner_member_id = ? OR (${received}))`
-      : `(owner_member_id = ? OR (folder = 'inbox' AND ${received}))`,
-    values: [identity.id, ...addresses]
+    sql: `((folder = 'inbox' AND (${inbox.sql})) OR (folder = 'sent' AND (${sent.sql})))`,
+    values: [...inbox.values, ...sent.values]
   };
 }

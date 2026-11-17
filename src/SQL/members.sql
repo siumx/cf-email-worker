@@ -1,5 +1,3 @@
-ALTER TABLE mails ADD COLUMN owner_member_id TEXT;
-CREATE INDEX idx_mails_member_folder_timestamp ON mails (owner_member_id, folder, timestamp DESC);
 CREATE INDEX idx_mails_recipient_folder_timestamp ON mails (LOWER(TRIM(to_address)), folder, timestamp DESC);
 
 CREATE TABLE members (
@@ -7,6 +5,7 @@ CREATE TABLE members (
   prefix TEXT NOT NULL UNIQUE COLLATE NOCASE,
   password_record TEXT,
   status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'disabled', 'deleted')),
+  role TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('user', 'admin')),
   must_change_password INTEGER NOT NULL DEFAULT 1 CHECK (must_change_password IN (0, 1)),
   auth_version INTEGER NOT NULL DEFAULT 1,
   created_at TEXT NOT NULL,

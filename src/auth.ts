@@ -29,6 +29,7 @@ export interface MemberRow {
   prefix: string;
   password_record: string | null;
   status: "active" | "disabled" | "deleted";
+  role: "user" | "admin";
   must_change_password: number;
   auth_version: number;
   created_at: string;
@@ -75,8 +76,12 @@ export function getMemberConfig(env: Env, hostname: string): MemberConfig | null
   }
 }
 
-function credentialVersion(config: MemberConfig, role: Identity["role"]): string {
-  return createHash("sha256").update(JSON.stringify(role === "admin"
+function bootstrapSubject(config: MemberConfig): string {
+  return `admin:${config.admin}`;
+}
+
+function credentialVersion(config: MemberConfig, bootstrap: boolean): string {
+  return createHash("sha256").update(JSON.stringify(bootstrap
     ? [config.admin, config.adminPassword, config.pepper]
     : [config.pepper])).digest("hex");
 }
@@ -118,10 +123,18 @@ export function requireMethod(request: Request, method: string): void {
 }
 
 export async function memberIdentity(env: Env, config: MemberConfig, member: MemberRow): Promise<Identity> {
+  const role = member.role === "admin" ? "admin" : "user";
+  if (role === "admin") {
+    return {
+      id: member.id, prefix: member.prefix, role, authVersion: member.auth_version,
+      mustChangePassword: Boolean(member.must_change_password),
+      receiveDomains: config.receiveDomains, sendDomains: config.sendDomains
+    };
+  }
   const { results } = await env.DB.prepare("SELECT domain, can_receive, can_send FROM member_domains WHERE member_id = ?")
     .bind(member.id).all<{ domain: string; can_receive: number; can_send: number }>();
   return {
-    id: member.id, prefix: member.prefix, role: "user", authVersion: member.auth_version,
+    id: member.id, prefix: member.prefix, role, authVersion: member.auth_version,
     mustChangePassword: Boolean(member.must_change_password),
     receiveDomains: results.filter((row) => row.can_receive && config.receiveDomains.includes(row.domain)).map((row) => row.domain),
     sendDomains: results.filter((row) => row.can_send && config.sendDomains.includes(row.domain)).map((row) => row.domain)
@@ -139,10 +152,11 @@ export async function authenticate(request: Request, env: Env, config: MemberCon
     }));
   } catch { return null; }
   if (typeof payload.sub !== "string" || typeof payload.cv !== "string" || !Number.isInteger(payload.av) ||
-    (payload.role !== "admin" && payload.role !== "user") ||
-    payload.cv !== credentialVersion(config, payload.role)) return null;
-  if (payload.role === "admin") {
-    if (payload.sub !== `admin:${config.admin}` || payload.av !== 0) return null;
+    (payload.role !== "admin" && payload.role !== "user")) return null;
+  const bootstrap = payload.sub === bootstrapSubject(config);
+  if (payload.cv !== credentialVersion(config, bootstrap)) return null;
+  if (bootstrap) {
+    if (payload.role !== "admin" || payload.av !== 0) return null;
     return { id: payload.sub, prefix: config.admin, role: "admin", authVersion: 0,
       mustChangePassword: false, receiveDomains: config.receiveDomains, sendDomains: config.sendDomains };
   }
@@ -169,13 +183,14 @@ function sessionCookie(token: string, maxAge = SESSION_SECONDS): string {
 }
 
 async function startSession(request: Request, env: Env, config: MemberConfig, identity: Identity): Promise<Response> {
-  if (identity.role === "user") {
+  const bootstrap = identity.id === bootstrapSubject(config);
+  if (!bootstrap) {
     const row = await env.DB.prepare("SELECT 1 AS ok FROM members WHERE id = ? AND status = 'active' AND auth_version = ?")
       .bind(identity.id, identity.authVersion).first();
     if (!row) throw new ApiError(401, "AUTH_REQUIRED");
   }
   const now = Math.floor(Date.now() / 1000);
-  const token = await new SignJWT({ role: identity.role, av: identity.authVersion, cv: credentialVersion(config, identity.role) })
+  const token = await new SignJWT({ role: identity.role, av: identity.authVersion, cv: credentialVersion(config, bootstrap) })
     .setProtectedHeader({ alg: "HS256", typ: "JWT" }).setSubject(identity.id).setIssuer(ISSUER)
     .setAudience(new URL(request.url).origin).setIssuedAt(now).setExpirationTime(now + SESSION_SECONDS).sign(config.jwtSecret);
   const response = jsonOk({ identity: publicIdentity(identity) });
@@ -207,14 +222,14 @@ export async function handleAuth(request: Request, env: Env, config: MemberConfi
       : Boolean(member?.password_record) && await verifyPassword(body.password, member!.password_record!, config.pepper);
     if (!matches || (prefix !== config.admin && (!member || member.status !== "active"))) throw new ApiError(401, "INVALID_CREDENTIALS");
     const signedIn: Identity = prefix === config.admin
-      ? { id: `admin:${config.admin}`, prefix, role: "admin", authVersion: 0, mustChangePassword: false,
+      ? { id: bootstrapSubject(config), prefix, role: "admin", authVersion: 0, mustChangePassword: false,
         receiveDomains: config.receiveDomains, sendDomains: config.sendDomains }
       : await memberIdentity(env, config, member!);
     return startSession(request, env, config, signedIn);
   }
   if (path === "/api/auth/password") {
     const current = requireIdentity(identity, true);
-    if (current.role !== "user") throw new ApiError(403, "FORBIDDEN");
+    if (current.id === bootstrapSubject(config)) throw new ApiError(403, "FORBIDDEN");
     const body = await readJson(request);
     if (typeof body.currentPassword !== "string" || body.currentPassword.length > 128 || !validPassword(body.password)) throw new ApiError(400, "INVALID_PASSWORD");
     const member = await env.DB.prepare("SELECT * FROM members WHERE id = ? AND status = 'active'").bind(current.id).first<MemberRow>();
