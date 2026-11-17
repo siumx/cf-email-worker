@@ -61,13 +61,13 @@ export function getMemberConfig(env: Env, hostname: string): MemberConfig | null
   if (!isAdminMailHost(hostname, env.ADMIN_MAIL_HOSTS) || env.MEMBER === undefined) return null;
   const setting = env.MEMBER;
   if (!setting || typeof setting !== "object" || Array.isArray(setting)) throw new ApiError(503, "MEMBER_CONFIG_INVALID");
-  if (setting.enable === false || setting.enable === undefined || setting.admin === undefined || setting.admin === "") return null;
+  if (setting.enable === false || setting.enable === undefined) return null;
   if (setting.enable !== true) throw new ApiError(503, "MEMBER_CONFIG_INVALID");
   try {
-    const admin = normalizePrefix(setting.admin);
-    if (!validPassword(setting.password) || !env.MEMBER_PASSWORD_PEPPER || !env.MEMBER_JWT_SECRET) throw new Error("Missing secrets");
+    const admin = setting.admin === undefined || setting.admin === "" ? "" : normalizePrefix(setting.admin);
+    if ((admin !== "" && !validPassword(setting.password)) || !env.MEMBER_PASSWORD_PEPPER || !env.MEMBER_JWT_SECRET) throw new Error("Missing secrets");
     return {
-      admin, adminPassword: setting.password, pepper: env.MEMBER_PASSWORD_PEPPER,
+      admin, adminPassword: setting.password ?? "", pepper: env.MEMBER_PASSWORD_PEPPER,
       jwtSecret: new TextEncoder().encode(env.MEMBER_JWT_SECRET),
       receiveDomains: configuredDomains(env.RECEIVABLE_DOMAINS), sendDomains: configuredDomains(env.SENDABLE_DOMAINS)
     };
@@ -78,6 +78,10 @@ export function getMemberConfig(env: Env, hostname: string): MemberConfig | null
 
 function bootstrapSubject(config: MemberConfig): string {
   return `admin:${config.admin}`;
+}
+
+function isBootstrap(config: MemberConfig, id: string): boolean {
+  return config.admin !== "" && id === bootstrapSubject(config);
 }
 
 function credentialVersion(config: MemberConfig, bootstrap: boolean): string {
@@ -153,7 +157,7 @@ export async function authenticate(request: Request, env: Env, config: MemberCon
   } catch { return null; }
   if (typeof payload.sub !== "string" || typeof payload.cv !== "string" || !Number.isInteger(payload.av) ||
     (payload.role !== "admin" && payload.role !== "user")) return null;
-  const bootstrap = payload.sub === bootstrapSubject(config);
+  const bootstrap = isBootstrap(config, payload.sub);
   if (payload.cv !== credentialVersion(config, bootstrap)) return null;
   if (bootstrap) {
     if (payload.role !== "admin" || payload.av !== 0) return null;
@@ -183,7 +187,7 @@ function sessionCookie(token: string, maxAge = SESSION_SECONDS): string {
 }
 
 async function startSession(request: Request, env: Env, config: MemberConfig, identity: Identity): Promise<Response> {
-  const bootstrap = identity.id === bootstrapSubject(config);
+  const bootstrap = isBootstrap(config, identity.id);
   if (!bootstrap) {
     const row = await env.DB.prepare("SELECT 1 AS ok FROM members WHERE id = ? AND status = 'active' AND auth_version = ?")
       .bind(identity.id, identity.authVersion).first();
@@ -216,12 +220,13 @@ export async function handleAuth(request: Request, env: Env, config: MemberConfi
     const prefix = normalizePrefix(body.prefix);
     if (typeof body.password !== "string" || body.password.length > 128) throw new ApiError(401, "INVALID_CREDENTIALS");
     const member = await env.DB.prepare("SELECT * FROM members WHERE prefix = ?").bind(prefix).first<MemberRow>();
-    if (prefix === config.admin && member) throw new ApiError(503, "MEMBER_CONFIG_INVALID");
-    const matches = prefix === config.admin
+    const bootstrapLogin = config.admin !== "" && prefix === config.admin;
+    if (bootstrapLogin && member) throw new ApiError(503, "MEMBER_CONFIG_INVALID");
+    const matches = bootstrapLogin
       ? equalPassword(body.password, config.adminPassword)
       : Boolean(member?.password_record) && await verifyPassword(body.password, member!.password_record!, config.pepper);
-    if (!matches || (prefix !== config.admin && (!member || member.status !== "active"))) throw new ApiError(401, "INVALID_CREDENTIALS");
-    const signedIn: Identity = prefix === config.admin
+    if (!matches || (!bootstrapLogin && (!member || member.status !== "active"))) throw new ApiError(401, "INVALID_CREDENTIALS");
+    const signedIn: Identity = bootstrapLogin
       ? { id: bootstrapSubject(config), prefix, role: "admin", authVersion: 0, mustChangePassword: false,
         receiveDomains: config.receiveDomains, sendDomains: config.sendDomains }
       : await memberIdentity(env, config, member!);
@@ -229,7 +234,7 @@ export async function handleAuth(request: Request, env: Env, config: MemberConfi
   }
   if (path === "/api/auth/password") {
     const current = requireIdentity(identity, true);
-    if (current.id === bootstrapSubject(config)) throw new ApiError(403, "FORBIDDEN");
+    if (isBootstrap(config, current.id)) throw new ApiError(403, "FORBIDDEN");
     const body = await readJson(request);
     if (typeof body.currentPassword !== "string" || body.currentPassword.length > 128 || !validPassword(body.password)) throw new ApiError(400, "INVALID_PASSWORD");
     const member = await env.DB.prepare("SELECT * FROM members WHERE id = ? AND status = 'active'").bind(current.id).first<MemberRow>();

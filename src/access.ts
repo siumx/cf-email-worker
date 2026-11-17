@@ -26,8 +26,7 @@ export function publicIdentity(identity: Identity | null): object | null {
 }
 
 export function memberModeEnabled(env: Env, hostname: string): boolean {
-  return isAdminMailHost(hostname, env.ADMIN_MAIL_HOSTS) && env.MEMBER?.enable === true &&
-    typeof env.MEMBER.admin === "string" && env.MEMBER.admin.trim().length > 0;
+  return isAdminMailHost(hostname, env.ADMIN_MAIL_HOSTS) && env.MEMBER?.enable === true;
 }
 
 export function legacyMailAccess(env: Env, hostname: string): MailAccess {

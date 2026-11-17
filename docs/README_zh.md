@@ -58,7 +58,7 @@ RECEIVABLE_DOMAINS = ["example.com", "abc.com"]
 SENDABLE_DOMAINS = ["example.com", "notify.example.com"]
 ```
 
-完成後用原本的部署指令發布。未設定 `MEMBER`、`enable = false` 或沒有 `admin` 時，維持原模式。已啟用但 Secret 缺失或格式錯誤時會回報設定錯誤，不會放行匿名管理權限。
+完成後用原本的部署指令發布。未設定 `MEMBER` 或 `enable = false` 時，維持原模式。沒有 `admin` 不影響會員模式。已啟用但 Secret 缺失或格式錯誤時會回報設定錯誤，不會放行匿名管理權限。
 
 MEMBER的admin 不寫入會員表，可查看全部已儲存郵件，使用全部發件域名，以及建立、禁用、刪除會員、分配域名和重設密碼。首次登入後建立第一位會員。會員帳號亦是固定的郵箱前綴，不分大小寫；例如 `user` 獲配 `example.com` 與 `abc.com` 收件權限，就只能讀取 `user@example.com` 和 `user@abc.com`。發件域名獨立分配，全域域名移除後會在下一次請求生效。
 
@@ -66,7 +66,7 @@ MEMBER的admin 不寫入會員表，可查看全部已儲存郵件，使用全�
 
 ## 目錄
 
-- `src/`：Worker。`index.ts` 路由請求，`handlers.ts` 處理郵件，`db.ts` 存取 D1，`SQL/schema.sql` 由 `npm run init` 套用。
+- `src/`：Worker。`index.ts` 路由請求，`handlers.ts` 處理郵件，`db.ts` 存取 D1。`npm run init` 先套用 `src/SQL/schema.sql`，再套用 `src/SQL/` 裡其餘 SQL。
 - `public/`：Webmail 介面，以 Worker Assets 提供。
 - `migrations/`：既有 D1 資料庫升級；`scripts/member-admin.mjs` 初始化或更新管理員 Secret。
 - `wrangler.toml.example`：設定範本。複製成 `wrangler.toml`。

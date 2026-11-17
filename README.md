@@ -55,7 +55,7 @@ RECEIVABLE_DOMAINS = ["example.com", "abc.com"]
 SENDABLE_DOMAINS = ["example.com", "notify.example.com"]
 ```
 
-Deploy with the existing command. If `MEMBER` is unset, `enable = false`, or `admin` is missing, the original mode stays. When member mode is enabled but a Secret is missing or malformed, the Worker returns a configuration error and does not grant anonymous admin access.
+Deploy with the existing command. If `MEMBER` is unset or `enable = false`, the original mode stays. Omitting `admin` does not turn member mode off. When member mode is enabled but a Secret is missing or malformed, the Worker returns a configuration error and does not grant anonymous admin access.
 
 The `MEMBER` admin is not stored in the member table. That account can read all stored mail, use every send domain, and create, disable, and delete members, assign domains, and reset passwords. Sign in and create the first member. A member account is a fixed mailbox prefix and is not case-sensitive. For example, `user` with receive access to `example.com` and `abc.com` can read only `user@example.com` and `user@abc.com`. Send domains are assigned separately. Removing a domain from the global list takes effect on the next request.
 
@@ -63,7 +63,7 @@ New members, and members whose passwords were reset, must change the initial pas
 
 ## Layout
 
-- `src/`: Worker. `index.ts` routes requests, `handlers.ts` handles mail, `db.ts` talks to D1, `SQL/schema.sql` is the schema applied by `npm run init`.
+- `src/`: Worker. `index.ts` routes requests, `handlers.ts` handles mail, `db.ts` talks to D1. `npm run init` applies `src/SQL/schema.sql` first, then the other SQL files in `src/SQL/`.
 - `public/`: webmail UI, served as Worker assets.
 - `migrations/`: D1 upgrades for existing installations. `scripts/member-admin.mjs` initializes or updates admin secrets.
 - `wrangler.toml.example`: config template. Copy it to `wrangler.toml`.
